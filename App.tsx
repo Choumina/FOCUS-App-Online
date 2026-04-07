@@ -2,9 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { AppRoute, Task, CalendarEvent } from './types';
 import { Plus, Loader2 } from 'lucide-react';
-import { auth, db, handleFirestoreError, OperationType } from './firebase';
-import { onAuthStateChanged, User as FirebaseUser, signOut, deleteUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { supabase, handleSupabaseError, OperationType } from './supabase';
+import { User } from '@supabase/supabase-js';
 import HomeView from './components/HomeView';
 import FocusTimerView from './components/FocusTimerView';
 import TasksView from './components/TasksView';
@@ -30,7 +29,7 @@ import ConfirmationModal from './components/ConfirmationModal';
 
 const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(AppRoute.HOME);
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [hasCompletedTour, setHasCompletedTour] = useState<boolean | null>(null);
@@ -72,80 +71,118 @@ const App: React.FC = () => {
 
   // Auth & Data Fetching
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
+    // Check active session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Session on mount:', session);
+      setUser(session?.user ?? null);
       setIsAuthReady(true);
-
-      if (firebaseUser) {
-        setIsLoadingData(true);
-        const userDocRef = doc(db, 'users', firebaseUser.uid);
-        try {
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setHasCompletedOnboarding(data.hasCompletedOnboarding ?? false);
-            setHasCompletedTour(data.hasCompletedTour ?? false);
-            // Load data from Firestore
-            if (data.points !== undefined) _setCoins(data.points);
-            if (data.tasks) setTasks(data.tasks);
-            if (data.homeConfig) setHomeSections(data.homeConfig);
-            if (data.placedItems) setPlacedItems(data.placedItems);
-            if (data.userProfile) setUserProfile(data.userProfile);
-          } else {
-            // New user
-            setHasCompletedOnboarding(false);
-            setHasCompletedTour(false);
-            const initialData = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              points: 0,
-              hasCompletedOnboarding: false,
-              hasCompletedTour: false,
-              createdAt: new Date().toISOString(),
-              homeConfig: ['focus', 'calendar', 'games'],
-              placedItems: placedItems,
-              tasks: [
-                { id: '1', title: '閱讀天龍八部第二章', dueDate: '2026/06/25', completed: false },
-                { id: '2', title: '畢業展作品繳交', dueDate: '2026/08/07', completed: false },
-              ],
-              userProfile: {
-                ...userProfile,
-                name: firebaseUser.displayName || 'Focus User',
-                email: firebaseUser.email || 'user@example.com',
-                registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
-              }
-            };
-            await setDoc(userDocRef, initialData);
-            setTasks(initialData.tasks);
-            setUserProfile(initialData.userProfile);
-          }
-        } catch (error) {
-          handleFirestoreError(error, OperationType.GET, `users/${firebaseUser.uid}`);
-        } finally {
-          setIsLoadingData(false);
-        }
+      if (session?.user) {
+        fetchUserData(session.user.id);
       }
     });
-    return () => unsubscribe();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event, session?.user?.email);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      setIsAuthReady(true);
+
+      if (currentUser) {
+        fetchUserData(currentUser.id);
+      } else {
+        setIsLoadingData(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Sync state to Firestore when it changes
+  const fetchUserData = async (userId: string) => {
+    console.log('Fetching data for user:', userId);
+    setIsLoadingData(true);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Supabase fetch error:', error);
+        handleSupabaseError(error, OperationType.GET, `users/${userId}`);
+      }
+
+      if (data) {
+        console.log('User data found:', data.email);
+        setHasCompletedOnboarding(data.has_completed_onboarding ?? false);
+        setHasCompletedTour(data.has_completed_tour ?? false);
+        if (data.points !== undefined) _setCoins(data.points);
+        if (data.tasks) setTasks(data.tasks);
+        if (data.home_config) setHomeSections(data.home_config);
+        if (data.placed_items) setPlacedItems(data.placed_items);
+        if (data.user_profile) setUserProfile(data.user_profile);
+      } else {
+        console.log('New user detected, initializing data...');
+        // Need to get the latest session to get email/metadata safely
+        const { data: { session } } = await supabase.auth.getSession();
+        const currentUser = session?.user;
+
+        setHasCompletedOnboarding(false);
+        setHasCompletedTour(false);
+        const initialData = {
+          id: userId,
+          email: currentUser?.email,
+          points: 0,
+          has_completed_onboarding: false,
+          has_completed_tour: false,
+          home_config: ['focus', 'calendar', 'games'],
+          placed_items: placedItems,
+          tasks: [
+            { id: '1', title: '閱讀天龍八部第二章', dueDate: '2026/06/25', completed: false },
+            { id: '2', title: '畢業展作品繳交', dueDate: '2026/08/07', completed: false },
+          ],
+          user_profile: {
+            ...userProfile,
+            name: currentUser?.user_metadata?.full_name || 'Focus User',
+            email: currentUser?.email || 'user@example.com',
+            registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
+          }
+        };
+        const { error: insertError } = await supabase.from('users').insert(initialData);
+        if (insertError) {
+          console.error('Insert user error:', insertError);
+          handleSupabaseError(insertError, OperationType.CREATE, `users/${userId}`);
+        }
+        setTasks(initialData.tasks);
+        setUserProfile(initialData.user_profile);
+      }
+    } catch (error) {
+      console.error('Error in fetchUserData:', error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  // Sync state to Supabase when it changes
   useEffect(() => {
     if (!user || isLoadingData) return;
     const syncData = async () => {
       try {
-        await updateDoc(doc(db, 'users', user.uid), {
+        const { error } = await supabase.from('users').update({
           points: coins,
           tasks: tasks,
-          homeConfig: homeSections,
-          placedItems: placedItems,
-          userProfile: userProfile,
-          hasCompletedOnboarding: hasCompletedOnboarding,
-          hasCompletedTour: hasCompletedTour
-        });
+          home_config: homeSections,
+          placed_items: placedItems,
+          user_profile: userProfile,
+          has_completed_onboarding: hasCompletedOnboarding,
+          has_completed_tour: hasCompletedTour
+        }).eq('id', user.id);
+        
+        if (error) {
+          console.error('Sync failed:', error.message);
+        }
       } catch (error) {
-        // Silent fail for background sync or handle if critical
+        // Silent fail for background sync
       }
     };
     const timer = setTimeout(syncData, 2000); // Debounce sync
@@ -392,9 +429,9 @@ const App: React.FC = () => {
     setHasCompletedOnboarding(true);
     if (user) {
       try {
-        await updateDoc(doc(db, 'users', user.uid), { hasCompletedOnboarding: true });
+        await supabase.from('users').update({ has_completed_onboarding: true }).eq('id', user.id);
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+        handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
       }
     }
   };
@@ -404,9 +441,9 @@ const App: React.FC = () => {
     setHasCompletedTour(true);
     if (user) {
       try {
-        await updateDoc(doc(db, 'users', user.uid), { hasCompletedTour: true });
+        await supabase.from('users').update({ has_completed_tour: true }).eq('id', user.id);
       } catch (error) {
-        handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+        handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
       }
     }
   };
@@ -414,7 +451,7 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     try {
       setIsLoadingData(true);
-      await signOut(auth);
+      await supabase.auth.signOut();
       
       // Reset local states to default values
       _setCoins(0);
@@ -463,13 +500,15 @@ const App: React.FC = () => {
     try {
       setIsLoadingData(true);
       setShowDeleteConfirm(false);
-      const uid = user.uid;
+      const uid = user.id;
       
-      // 1. Delete Firestore data
-      await deleteDoc(doc(db, 'users', uid));
+      // 1. Delete user data
+      await supabase.from('users').delete().eq('id', uid);
       
-      // 2. Delete Auth user
-      await deleteUser(user);
+      // 2. Delete Auth user (requires RPC or edge function usually, 
+      // but for client-side we'll just logout for now, 
+      // as deleting auth user directly from client is restricted)
+      await supabase.auth.signOut();
       
       // 3. Reset local states
       _setCoins(0);
@@ -501,12 +540,7 @@ const App: React.FC = () => {
       setCurrentRoute(AppRoute.HOME);
     } catch (error: any) {
       console.error('Delete account failed:', error);
-      if (error.code === 'auth/requires-recent-login') {
-        alert('為了安全起見，刪除帳號需要您近期曾進行過登入。請重新登入後再試一次。');
-        await signOut(auth);
-      } else {
-        alert('刪除帳號失敗，請稍後再試。');
-      }
+      alert('刪除帳號失敗，請稍後再試。');
     } finally {
       setIsLoadingData(false);
     }

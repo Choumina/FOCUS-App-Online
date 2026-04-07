@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { auth, googleProvider } from '../firebase';
-import { signInWithPopup } from 'firebase/auth';
+import { supabase } from '../supabase';
 import { LogIn, Sparkles, ShieldCheck, Zap, Loader2 } from 'lucide-react';
 
 const LoginView: React.FC = () => {
@@ -12,19 +11,22 @@ const LoginView: React.FC = () => {
     
     setIsLoading(true);
     try {
-      googleProvider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, googleProvider);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          queryParams: {
+            prompt: 'select_account',
+          },
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
     } catch (error: any) {
       console.error("Login failed:", error);
-      // Show error to user since console is hidden
-      if (error.code === 'auth/popup-blocked') {
-        alert("登入視窗被瀏覽器封鎖了，請允許彈出視窗後再試一次。");
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        // User closed the popup, no need for alert
-      } else {
-        alert(`登入失敗: ${error.message}`);
-      }
+      alert(`登入失敗: ${error.message}`);
     } finally {
+      // For OAuth, the page will redirect, so we don't necessarily need to set loading to false 
+      // but it's good practice for error cases.
       setIsLoading(false);
     }
   };
