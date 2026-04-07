@@ -1,0 +1,7 @@
+{
+  "name": "Focus AI",
+  "description": "A comprehensive productivity and gamified academic task manager with built-in AI assistant, Pomodoro timer, calendar, and virtual pet system.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
