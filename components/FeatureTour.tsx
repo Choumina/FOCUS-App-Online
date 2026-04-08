@@ -74,8 +74,14 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
           width: coords.width + 8,
           height: coords.height + 8,
         }}
-        className="absolute border-2 border-white rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.1)] pointer-events-none"
-      />
+        className="absolute border-2 border-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.5)] pointer-events-none"
+      >
+        <motion.div 
+          animate={{ scale: [1, 1.1, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+          className="absolute inset-0 border-2 border-white/50 rounded-xl"
+        />
+      </motion.div>
 
       {/* Tooltip */}
       <AnimatePresence mode="wait">

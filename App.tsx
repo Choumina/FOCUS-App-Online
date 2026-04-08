@@ -97,6 +97,14 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Set tour visible after onboarding is cleared and user is on Home page
+  useEffect(() => {
+    if (user && hasCompletedOnboarding === true && hasCompletedTour === false && currentRoute === AppRoute.HOME && !isTourVisible) {
+      const timer = setTimeout(() => setIsTourVisible(true), 1500); // 延長延遲確保 HomeView 已完全渲染
+      return () => clearTimeout(timer);
+    }
+  }, [user, hasCompletedOnboarding, hasCompletedTour, currentRoute, isTourVisible]);
+
   const fetchUserData = async (userId: string) => {
     console.log('Fetching data for user:', userId);
     setIsLoadingData(true);
@@ -546,54 +554,38 @@ const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (currentRoute === AppRoute.PROFILE && hasCompletedTour === false && !isTourVisible) {
-      // Small delay to ensure elements are rendered
-      const timer = setTimeout(() => setIsTourVisible(true), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [currentRoute, hasCompletedTour, isTourVisible]);
+  // Tour trigger logic moved to the top useEffect
 
   const tourSteps = [
     {
       targetId: 'home-profile',
       title: '個人中心',
-      content: '點擊這裡可以查看你的等級、排名，並進行帳號設定。'
+      content: '這裡是你的個人中心，點擊頭像可以進入帳號設定、查看等級與積分紀錄。'
     },
     {
-      targetId: 'profile-account',
-      title: '帳號設定',
-      content: '在這裡修改你的個人資料、頭像以及電子郵件。'
+      targetId: 'home-tasks',
+      title: '提醒事項',
+      content: '你最近的待辦任務會顯示在這裡，點擊卡片可以查看完整的任務清單。'
     },
     {
-      targetId: 'profile-notifications',
-      title: '通知提醒',
-      content: '設定專注提醒，讓 AI 幫你保持規律的學習節奏。'
-    },
-    {
-      targetId: 'profile-archive',
-      title: '任務封存',
-      content: '查看過去已完成的任務紀錄與獲得的獎勵。'
-    },
-    {
-      targetId: 'profile-logout',
-      title: '登出帳號',
-      content: '安全退出當前帳號。'
+      targetId: 'home-timer',
+      title: '番茄鐘',
+      content: '想要開始一段專注時光嗎？點擊番茄鐘卡片進入專注計時器。'
     },
     {
       targetId: 'nav-focus',
-      title: '專注模式',
-      content: '隨時回到首頁，查看待辦事項與使用番茄鐘。'
+      title: 'Focus 核心',
+      content: '底部選單可以隨時切換功能。這個按鈕會帶你回到目前的主頁面。'
     },
     {
       targetId: 'nav-game',
-      title: '遊戲世界',
-      content: '進入你的專屬空間，與寵物互動並參與賽馬挑戰。'
+      title: '遊戲空間',
+      content: '想休息一下？點擊這裡進入寵物空間，可以佈置你的房間或參加賽馬。'
     },
     {
       targetId: 'nav-ai',
       title: 'AI 助手',
-      content: '最強大的功能！讓 AI 幫你拆解任務、分析進度，是你的專屬導師。'
+      content: '這是你的學術夥伴！讓 AI 幫你拆解複雜任務、分析進度，助你一臂之力。'
     }
   ];
 
