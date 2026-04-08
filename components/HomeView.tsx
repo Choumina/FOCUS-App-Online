@@ -321,6 +321,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
               {visibleSubSections.calendar.map(subId => (
                 <SortableSubItem key={subId} id={subId}>
                   <div 
+                    id="home-calendar"
                     onClick={() => navigateTo(AppRoute.CALENDAR_DETAIL)}
                     className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm cursor-pointer relative group"
                   >
@@ -370,7 +371,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
       case 'games':
         const hiddenGames = allSubSections.games.filter(s => !visibleSubSections.games.includes(s.id));
         return (
-          <div key="games" className="pl-8 pr-6">
+          <div key="games" className="pl-8 pr-6" id="home-games-area">
             <div className="flex justify-between items-center mb-4 relative">
               <h2 className="text-xl font-bold">Game Areas</h2>
               <div className="flex items-center gap-1">

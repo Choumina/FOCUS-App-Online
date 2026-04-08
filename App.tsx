@@ -195,7 +195,7 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(syncData, 2000); // Debounce sync
     return () => clearTimeout(timer);
-  }, [coins, tasks, homeSections, placedItems, userProfile.level, hasCompletedOnboarding, user, isLoadingData]);
+  }, [coins, tasks, homeSections, placedItems, userProfile, hasCompletedOnboarding, user, isLoadingData]);
 
   const MAX_COINS = 9999;
 
@@ -573,13 +573,23 @@ const App: React.FC = () => {
       content: '想要開始一段專注時光嗎？點擊番茄鐘卡片進入專注計時器。'
     },
     {
+      targetId: 'home-calendar',
+      title: '行事曆',
+      content: '這裡是你的月曆檢視，可以查看每天的行程安排與 AI 建議的學習進度。'
+    },
+    {
+      targetId: 'home-games-area',
+      title: '遊戲專區',
+      content: '向下滾動即可看到遊戲專區！你可以在這裡與寵物互動、參加賽馬或查看积分排行榜。'
+    },
+    {
       targetId: 'nav-focus',
       title: 'Focus 核心',
       content: '底部選單可以隨時切換功能。這個按鈕會帶你回到目前的主頁面。'
     },
     {
       targetId: 'nav-game',
-      title: '遊戲空間',
+      title: '遊戲世界',
       content: '想休息一下？點擊這裡進入寵物空間，可以佈置你的房間或參加賽馬。'
     },
     {
