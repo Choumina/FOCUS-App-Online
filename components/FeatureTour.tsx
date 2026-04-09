@@ -23,6 +23,9 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
     const step = steps[currentStep];
     const el = document.getElementById(step.targetId);
     if (el) {
+      // Scroll into view instantly to ensure accurate measurement
+      el.scrollIntoView({ behavior: 'auto', block: 'center' });
+      
       const rect = el.getBoundingClientRect();
       setCoords({
         top: rect.top,
@@ -30,8 +33,6 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
         width: rect.width,
         height: rect.height
       });
-      // Scroll into view if needed
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -54,12 +55,15 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
     if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
-      onComplete();
+      // Final confirmation before completion
+      if (window.confirm('導覽已結束，準備好開啟您的專注之旅了嗎？')) {
+        onComplete();
+      }
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[300] pointer-events-none">
+    <div className="fixed inset-0 z-[300]">
       {/* Backdrop with hole */}
       <div className="absolute inset-0 bg-black/60 transition-all duration-500" style={{
         clipPath: `polygon(0% 0%, 0% 100%, ${coords.left}px 100%, ${coords.left}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top + coords.height}px, ${coords.left}px ${coords.top + coords.height}px, ${coords.left}px 100%, 100% 100%, 100% 0%)`
@@ -92,19 +96,26 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
             opacity: 1, 
             y: 0, 
             scale: 1,
-            top: coords.top > window.innerHeight / 2 ? coords.top - 180 : coords.top + coords.height + 20,
+          animate={{ 
+            opacity: 1, 
+            y: 0, 
+            scale: 1,
+            // Enhanced clamping logic:
+            // 1. If lower half of screen, put it above target.
+            // 2. If it is still too high/low, clamp it within [20, innerHeight - 250]
+            top: coords.top > (window.innerHeight / 2) 
+              ? Math.max(20, coords.top - 220) 
+              : Math.min(window.innerHeight - 250, coords.top + coords.height + 20),
             left: Math.max(20, Math.min(window.innerWidth - 300, coords.left + coords.width / 2 - 140))
           }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="absolute w-[280px] bg-white rounded-3xl p-5 shadow-2xl pointer-events-auto border border-gray-100"
+          className="absolute w-[280px] bg-white rounded-3xl p-5 shadow-2xl pointer-events-auto border border-gray-100 z-[310]"
         >
           <div className="flex items-start justify-between mb-3">
             <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
               <Info size={18} />
             </div>
-            <button onClick={onComplete} className="text-gray-300 hover:text-gray-500 transition-colors">
-              <X size={20} />
-            </button>
+            {/* 移除關閉按鈕，強制導覽完成 */}
           </div>
 
           <h4 className="text-lg font-black text-gray-800 mb-1">{step.title}</h4>
@@ -120,7 +131,7 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
               onClick={handleNext}
               className="bg-gray-900 text-white px-5 py-2.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-gray-800 transition-colors"
             >
-              {currentStep === steps.length - 1 ? '完成' : '下一步'}
+              {currentStep === steps.length - 1 ? '完成導覽' : '下一步'}
               <ChevronRight size={16} />
             </button>
           </div>

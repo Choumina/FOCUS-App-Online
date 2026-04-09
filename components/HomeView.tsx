@@ -290,7 +290,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
         return (
           <div key="calendar" className="pl-8 pr-6">
             <div className="flex justify-between items-center mb-4 relative">
-              <h2 className="text-xl font-bold">Calendar</h2>
+              <h2 className="text-xl font-bold">行事曆</h2>
               <div className="flex items-center gap-1">
                 <button 
                   onClick={() => setShowAddMenu(showAddMenu === 'calendar' ? null : 'calendar')}
@@ -373,7 +373,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
         return (
           <div key="games" className="pl-8 pr-6" id="home-games-area">
             <div className="flex justify-between items-center mb-4 relative">
-              <h2 className="text-xl font-bold">Game Areas</h2>
+              <h2 className="text-xl font-bold">遊戲專區</h2>
               <div className="flex items-center gap-1">
                 <button 
                   onClick={() => setShowAddMenu(showAddMenu === 'games' ? null : 'games')}

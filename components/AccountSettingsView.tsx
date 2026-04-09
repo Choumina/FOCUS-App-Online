@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, User, Mail, Phone, Calendar } from 'lucide-react';
+import { ChevronLeft, User, Mail, Phone, Calendar, Sparkles } from 'lucide-react';
 
 interface AccountSettingsViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -13,9 +13,10 @@ interface AccountSettingsViewProps {
     email: string;
     registrationDate: string;
   };
+  authProvider?: string;
 }
 
-const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({ navigateTo, onDeleteAccount, userProfile }) => {
+const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({ navigateTo, onDeleteAccount, userProfile, authProvider }) => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <div className="bg-white p-6 flex items-center gap-4 shadow-sm">
@@ -66,6 +67,18 @@ const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({ navigateTo, o
             </button>
           </div>
 
+          <div className="flex items-center justify-between border-b border-gray-50 pb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500">
+                {authProvider === 'google' ? <Sparkles size={20} /> : <Mail size={20} />}
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 font-bold uppercase">登入方式</p>
+                <p className="font-bold text-gray-700 capitalize">{authProvider || 'Email'}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-500">
@@ -89,5 +102,6 @@ const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({ navigateTo, o
     </div>
   );
 };
+
 
 export default AccountSettingsView;

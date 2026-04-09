@@ -278,18 +278,26 @@ const AIChatView: React.FC<{
     const response = await chatWithAssistant(msgToSend, messages);
     setMessages(prev => [...prev, { role: 'bot', text: response.text }]);
     
-    if (response.events && response.events.length > 0) {
+    if (response.events && response.events.length > 0 && setCalendarEvents) {
       setCalendarEvents(prev => {
         const newEvents = [...prev];
         response.events.forEach((e: any) => {
-          newEvents.push({
-            id: Date.now().toString() + Math.random(),
-            title: e.title,
-            date: e.date,
-            top: parseInt(e.startTime.split(':')[0]) * 60 + parseInt(e.startTime.split(':')[1]),
-            height: (parseInt(e.endTime.split(':')[0]) * 60 + parseInt(e.endTime.split(':')[1])) - (parseInt(e.startTime.split(':')[0]) * 60 + parseInt(e.startTime.split(':')[1])),
-            color: 'bg-blue-100'
-          });
+          if (e.startTime && e.endTime) {
+            const startParts = e.startTime.split(':');
+            const endParts = e.endTime.split(':');
+            if (startParts.length === 2 && endParts.length === 2) {
+              const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+              const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+              newEvents.push({
+                id: Date.now().toString() + Math.random(),
+                title: e.title,
+                date: e.date,
+                top: startMinutes,
+                height: endMinutes - startMinutes,
+                color: 'bg-blue-100'
+              });
+            }
+          }
         });
         return newEvents;
       });
@@ -325,18 +333,26 @@ const AIChatView: React.FC<{
       matrixData: response.matrixData 
     }]);
     
-    if (response.events && response.events.length > 0) {
+    if (response.events && response.events.length > 0 && setCalendarEvents) {
       setCalendarEvents(prev => {
         const newEvents = [...prev];
         response.events.forEach((e: any) => {
-          newEvents.push({
-            id: Date.now().toString() + Math.random(),
-            title: e.title,
-            date: e.date,
-            top: parseInt(e.startTime.split(':')[0]) * 60 + parseInt(e.startTime.split(':')[1]),
-            height: (parseInt(e.endTime.split(':')[0]) * 60 + parseInt(e.endTime.split(':')[1])) - (parseInt(e.startTime.split(':')[0]) * 60 + parseInt(e.startTime.split(':')[1])),
-            color: 'bg-blue-100'
-          });
+          if (e.startTime && e.endTime) {
+            const startParts = e.startTime.split(':');
+            const endParts = e.endTime.split(':');
+            if (startParts.length === 2 && endParts.length === 2) {
+              const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+              const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+              newEvents.push({
+                id: Date.now().toString() + Math.random(),
+                title: e.title,
+                date: e.date,
+                top: startMinutes,
+                height: endMinutes - startMinutes,
+                color: 'bg-blue-100'
+              });
+            }
+          }
         });
         return newEvents;
       });

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppRoute, Task, CalendarEvent } from './types';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, Sparkles } from 'lucide-react';
 import { supabase, handleSupabaseError, OperationType } from './supabase';
 import { User } from '@supabase/supabase-js';
 import HomeView from './components/HomeView';
@@ -30,11 +30,11 @@ import ConfirmationModal from './components/ConfirmationModal';
 const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(AppRoute.HOME);
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [hasCompletedTour, setHasCompletedTour] = useState<boolean | null>(null);
   const [isTourVisible, setIsTourVisible] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
@@ -71,26 +71,23 @@ const App: React.FC = () => {
 
   // Auth & Data Fetching
   useEffect(() => {
-    // Check active session on mount
+    // 1. Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Session on mount:', session);
       setUser(session?.user ?? null);
-      setIsAuthReady(true);
       if (session?.user) {
         fetchUserData(session.user.id);
       }
+      // Give a tiny delay for state to stabilize and avoid flash
+      setTimeout(() => setIsInitializing(false), 500);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event, session?.user?.email);
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      setIsAuthReady(true);
-
-      if (currentUser) {
-        fetchUserData(currentUser.id);
+    // 2. Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserData(session.user.id);
       } else {
-        setIsLoadingData(false);
+        setIsInitializing(false);
       }
     });
 
@@ -144,14 +141,18 @@ const App: React.FC = () => {
           has_completed_onboarding: false,
           has_completed_tour: false,
           home_config: ['focus', 'calendar', 'games'],
-          placed_items: placedItems,
-          tasks: [
-            { id: '1', title: '閱讀天龍八部第二章', dueDate: '2026/06/25', completed: false },
-            { id: '2', title: '畢業展作品繳交', dueDate: '2026/08/07', completed: false },
+          placed_items: [
+            { id: 'start2', x: 20, y: 30, char: '📺', isReacting: false, clickCount: 0, areaId: 'blue' },
+            { id: 'env1', x: 15, y: 85, char: '🚽', isReacting: false, clickCount: 0, areaId: 'blue' },
+            { id: 'env2', x: 35, y: 85, char: '🛁', isReacting: false, clickCount: 0, areaId: 'blue' },
+            { id: 'env3', x: 85, y: 80, char: '🚪', isReacting: false, clickCount: 0, areaId: 'blue' },
+            { id: 'env4', x: 80, y: 20, char: '🖼️', isReacting: false, clickCount: 0, areaId: 'blue' },
           ],
+          tasks: [],
+          auth_provider: currentUser?.app_metadata?.provider || 'email',
           user_profile: {
             ...userProfile,
-            name: currentUser?.user_metadata?.full_name || 'Focus User',
+            name: currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Focus User',
             email: currentUser?.email || 'user@example.com',
             registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
           }
@@ -183,7 +184,8 @@ const App: React.FC = () => {
           placed_items: placedItems,
           user_profile: userProfile,
           has_completed_onboarding: hasCompletedOnboarding,
-          has_completed_tour: hasCompletedTour
+          has_completed_tour: hasCompletedTour,
+          auth_provider: user.app_metadata.provider || 'email'
         }).eq('id', user.id);
         
         if (error) {
@@ -205,21 +207,6 @@ const App: React.FC = () => {
       return Math.max(0, Math.min(next, MAX_COINS));
     });
   };
-
-  // Persistence effects - Disabled in favor of Firestore
-  /*
-  useEffect(() => { localStorage.setItem('focus_coins', coins.toString()); }, [coins]);
-  useEffect(() => { localStorage.setItem('focus_tasks', JSON.stringify(tasks)); }, [tasks]);
-  useEffect(() => { localStorage.setItem('focus_archived_tasks', JSON.stringify(archivedTasks)); }, [archivedTasks]);
-  useEffect(() => { localStorage.setItem('focus_home_sections', JSON.stringify(homeSections)); }, [homeSections]);
-  useEffect(() => { localStorage.setItem('focus_active_areas', JSON.stringify(activeAreas)); }, [activeAreas]);
-  useEffect(() => { localStorage.setItem('focus_placed_items', JSON.stringify(placedItems)); }, [placedItems]);
-  useEffect(() => { localStorage.setItem('focus_purchased_backgrounds', JSON.stringify(purchasedBackgrounds)); }, [purchasedBackgrounds]);
-  useEffect(() => { localStorage.setItem('focus_area_backgrounds', JSON.stringify(areaBackgrounds)); }, [areaBackgrounds]);
-  useEffect(() => { localStorage.setItem('focus_area_names', JSON.stringify(areaNames)); }, [areaNames]);
-  useEffect(() => { localStorage.setItem('focus_user_profile', JSON.stringify(userProfile)); }, [userProfile]);
-  useEffect(() => { localStorage.setItem('focus_last_bet', lastBetAmount.toString()); }, [lastBetAmount]);
-  */
 
   const [timerTotalTime, setTimerTotalTime] = useState(2400);
   const [timerTimeLeft, setTimerTimeLeft] = useState(2400);
@@ -393,7 +380,7 @@ const App: React.FC = () => {
       case AppRoute.PROFILE:
         return <ProfileView navigateTo={navigateTo} onLogout={handleLogout} userProfile={userProfile} />;
       case AppRoute.PROFILE_ACCOUNT:
-        return <AccountSettingsView navigateTo={navigateTo} onDeleteAccount={handleDeleteAccount} userProfile={userProfile} />;
+        return <AccountSettingsView navigateTo={navigateTo} onDeleteAccount={handleDeleteAccount} userProfile={userProfile} authProvider={user?.app_metadata?.provider} />;
       case AppRoute.PROFILE_NOTIFICATIONS:
         return <NotificationsView navigateTo={navigateTo} />;
       case AppRoute.PROFILE_EDIT:
@@ -554,8 +541,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Tour trigger logic moved to the top useEffect
-
   const tourSteps = [
     {
       targetId: 'home-profile',
@@ -599,24 +584,30 @@ const App: React.FC = () => {
     }
   ];
 
-  if (!isAuthReady) {
+  // 1. Show a clean loading screen during initialization OR data fetching
+  if (isInitializing || (user && hasCompletedOnboarding === null)) {
     return (
-      <div className="h-screen flex items-center justify-center bg-indigo-600">
-        <Loader2 className="animate-spin text-white" size={48} />
+      <div className="h-[100dvh] w-full bg-white flex flex-col items-center justify-center">
+        <div className="w-16 h-16 bg-blue-500 rounded-[2rem] flex items-center justify-center animate-pulse shadow-2xl shadow-blue-200">
+           <Sparkles className="text-white" size={32} />
+        </div>
+        <p className="mt-6 text-gray-400 font-bold text-sm tracking-widest animate-pulse">LOADING FOCUS AI...</p>
       </div>
     );
   }
 
+  // 2. Gatekeeper: If not logged in, ONLY show LoginView
   if (!user) {
     return <LoginView />;
   }
 
+  // 3. Only after login and data is ready, check onboarding
   if (hasCompletedOnboarding === false) {
     return <OnboardingView onComplete={handleOnboardingComplete} />;
   }
 
   return (
-    <div className="max-w-md mx-auto h-screen bg-white shadow-xl relative overflow-hidden flex flex-col font-sans">
+    <div className="max-w-md mx-auto h-[100dvh] w-full bg-white shadow-xl relative overflow-hidden flex flex-col font-sans">
       <FeatureTour 
         steps={tourSteps} 
         isVisible={isTourVisible} 
