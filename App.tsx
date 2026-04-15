@@ -236,14 +236,22 @@ const App: React.FC = () => {
       } else {
         // ── 全新使用者 ───────────────────────────────────────────────────
         console.log('New user, initializing...');
+
+        // 清除舊的 localStorage，避免舊資料誤判為「已完成」
+        // （例如：之前測試留下的 key、不同 port 的殘留）
+        localStorage.removeItem(localOnboardingKey);
+        localStorage.removeItem(localTourKey);
+
         setHasCompletedOnboarding(false);
         setHasCompletedTour(false);
+
+        // 注意：不把 has_completed_onboarding / has_completed_tour 放進 upsert payload
+        // 因為若 DB 欄位不存在，整個 upsert 會失敗！
+        // 這兩個狀態改由 user_profile._onboardingDone / _tourDone 追蹤
         const initialData = {
           id: authUser.id,
           email: authEmail,
           points: 0,
-          has_completed_onboarding: false,
-          has_completed_tour: false,
           home_config: ['focus', 'calendar', 'games'],
           placed_items: [
             { id: 'start2', x: 20, y: 30, char: '📺', isReacting: false, clickCount: 0, areaId: 'blue' },
@@ -259,17 +267,30 @@ const App: React.FC = () => {
             name: authName,
             email: authEmail,
             avatar: authAvatar || userProfile.avatar,
+            _onboardingDone: false,
+            _tourDone: false,
             registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
           },
           focus_logs: []
         };
+
         const { error: upsertError } = await supabase.from('users').upsert(initialData, { onConflict: 'id' });
         if (upsertError) {
           console.error('Upsert user error:', upsertError);
+          // 即使 upsert 失敗，UI 仍繼續（依靠 localStorage 備份）
+        } else {
+          // 成功後，才嘗試更新 has_completed_onboarding/tour 欄位（可選，若欄位不存在也沒關係）
+          supabase.from('users')
+            .update({ has_completed_onboarding: false, has_completed_tour: false })
+            .eq('id', authUser.id)
+            .then(() => {})
+            .catch(() => {}); // 欄位不存在時靜默忽略
         }
-        setTasks(initialData.tasks);
+
+        setTasks([]);
         setUserProfile(initialData.user_profile);
       }
+
     } catch (error) {
       console.error('Error in fetchUserData:', error);
     } finally {
@@ -535,42 +556,54 @@ const App: React.FC = () => {
   const handleOnboardingComplete = async () => {
     setHasCompletedOnboarding(true);
     if (user) {
-      // 三層儲存：localStorage + user_profile JSON + DB 欄位
       localStorage.setItem(`focus_onboarding_${user.id}`, 'true');
-      // 最穩健：直接存進 user_profile JSON（不需要新增 DB 欄位）
       setUserProfile(prev => ({ ...prev, _onboardingDone: true }));
+
+      // Step 1: 先儲存 user_profile JSON（最關鍵，不依賴額外欄位）
       try {
-        // 同步更新 has_completed_onboarding 欄位（若欄位不存在，此行會靜默失敗但不影響其他備份）
         await supabase.from('users').update({
-          has_completed_onboarding: true,
           user_profile: { ...userProfile, _onboardingDone: true }
         }).eq('id', user.id);
-      } catch (error) {
-        console.error('Failed to save onboarding state:', error);
+      } catch (e) {
+        console.error('Failed to save _onboardingDone to user_profile:', e);
       }
+
+      // Step 2: 嘗試更新 has_completed_onboarding 欄位（若欄位不存在也沒關係）
+      supabase.from('users')
+        .update({ has_completed_onboarding: true })
+        .eq('id', user.id)
+        .then(() => {})
+        .catch(() => {});
     }
   };
 
   const handleTourComplete = async () => {
     setIsTourVisible(false);
     setHasCompletedTour(true);
-    
+
     if (mainRef.current) {
       mainRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     if (user) {
-      // 三層儲存：localStorage + user_profile JSON + DB 欄位
       localStorage.setItem(`focus_tour_${user.id}`, 'true');
       setUserProfile(prev => ({ ...prev, _tourDone: true }));
+
+      // Step 1: 先儲存 user_profile JSON
       try {
         await supabase.from('users').update({
-          has_completed_tour: true,
           user_profile: { ...userProfile, _tourDone: true }
         }).eq('id', user.id);
-      } catch (error) {
-        console.error('Failed to save tour state:', error);
+      } catch (e) {
+        console.error('Failed to save _tourDone to user_profile:', e);
       }
+
+      // Step 2: 嘗試更新 has_completed_tour 欄位
+      supabase.from('users')
+        .update({ has_completed_tour: true })
+        .eq('id', user.id)
+        .then(() => {})
+        .catch(() => {});
     }
   };
 
