@@ -1,7 +1,7 @@
-
 import React, { useState } from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, Mail, Check } from 'lucide-react';
+import ViewHeader from './ViewHeader';
+import { Mail, Check } from 'lucide-react';
 
 interface ChangeEmailViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -19,23 +19,18 @@ const ChangeEmailView: React.FC<ChangeEmailViewProps> = ({ navigateTo, userProfi
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="bg-white p-6 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
+      <ViewHeader 
+        title="更改電子郵件" 
+        onBack={() => navigateTo(AppRoute.PROFILE_ACCOUNT)}
+        rightElement={
           <button 
-            onClick={() => navigateTo(AppRoute.PROFILE_ACCOUNT)}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+            onClick={handleSave}
+            className="bg-blue-500 text-white p-2.5 rounded-xl shadow-lg shadow-blue-100 hover:bg-blue-600 active:scale-90 transition-all"
           >
-            <ChevronLeft size={24} />
+            <Check size={20} strokeWidth={3} />
           </button>
-          <h1 className="text-xl font-bold">更改電子郵件</h1>
-        </div>
-        <button 
-          onClick={handleSave}
-          className="bg-blue-500 text-white p-2 rounded-xl shadow-md hover:bg-blue-600 transition-colors"
-        >
-          <Check size={20} />
-        </button>
-      </div>
+        }
+      />
 
       <div className="p-6">
         <div className="bg-white rounded-3xl p-6 shadow-sm space-y-4">

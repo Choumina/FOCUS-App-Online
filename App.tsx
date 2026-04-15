@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
-import { AppRoute, Task, CalendarEvent } from './types';
+import { AppRoute, Task, CalendarEvent, FocusLog, UserIdentity } from './types';
 import { Plus, Loader2, Sparkles } from 'lucide-react';
 import { supabase, handleSupabaseError, OperationType } from './supabase';
 import { User } from '@supabase/supabase-js';
+import ConfirmationModal from './components/ConfirmationModal';
 import HomeView from './components/HomeView';
 import FocusTimerView from './components/FocusTimerView';
 import TasksView from './components/TasksView';
@@ -25,7 +25,9 @@ import GameNavigation from './components/GameNavigation';
 import LoginView from './components/LoginView';
 import OnboardingView from './components/OnboardingView';
 import FeatureTour from './components/FeatureTour';
-import ConfirmationModal from './components/ConfirmationModal';
+import FocusAnalysisView from './components/FocusAnalysisView';
+import CalendarAdminView from './components/CalendarAdminView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(AppRoute.HOME);
@@ -43,6 +45,7 @@ const App: React.FC = () => {
   const [coins, _setCoins] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
+  const [focusLogs, setFocusLogs] = useState<FocusLog[]>([]);
   const [homeSections, setHomeSections] = useState<string[]>(['focus', 'calendar', 'games']);
   const [activeAreas, setActiveAreas] = useState<string[]>(['blue']);
   const [purchasedBackgrounds, setPurchasedBackgrounds] = useState<string[]>([]);
@@ -56,6 +59,7 @@ const App: React.FC = () => {
     winsTowardsNextLevel: 0,
     visitedRoutes: [AppRoute.HOME],
     email: 'user@example.com',
+    identity: 'other' as UserIdentity,
     registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
   });
   const [lastBetAmount, setLastBetAmount] = useState(100);
@@ -69,25 +73,62 @@ const App: React.FC = () => {
     { id: 'env4', x: 80, y: 20, char: '🖼️', isReacting: false, clickCount: 0, areaId: 'blue' },
   ]);
 
+  const lastFetchedUserId = React.useRef<string | null>(null);
+
   // Auth & Data Fetching
   useEffect(() => {
+    const checkSessionAndFetch = (sessionUser: User | null) => {
+      if (sessionUser) {
+        setUser(sessionUser);
+        if (lastFetchedUserId.current !== sessionUser.id) {
+          lastFetchedUserId.current = sessionUser.id;
+          fetchUserData(sessionUser.id);
+        }
+      }
+    };
+
     // 1. Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
+      const isSignupVerification = window.location.hash.includes('type=signup');
+      
+      if (isSignupVerification && session?.user) {
+        // 使用者點擊 email 驗證信，Supabase 預設會自動登入
+        // 為了符合使用者的預期（進入登入畫面手動輸入），這裡強制登出
+        supabase.auth.signOut().then(() => {
+          checkSessionAndFetch(null);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          setIsInitializing(false);
+        });
+      } else {
+        checkSessionAndFetch(session?.user || null);
+
+        // Clean up OAuth or verification URL params
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('code') || url.searchParams.has('token_hash') || window.location.hash.includes('access_token')) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        setIsInitializing(false);
       }
-      // Give a tiny delay for state to stabilize and avoid flash
-      setTimeout(() => setIsInitializing(false), 500);
     });
 
     // 2. Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      } else {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const isSignupVerification = window.location.hash.includes('type=signup');
+      
+      if (isSignupVerification && session?.user) {
+        await supabase.auth.signOut();
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        checkSessionAndFetch(session?.user || null);
+      } else if (event === 'SIGNED_OUT') {
+        lastFetchedUserId.current = null;
+        setUser(null);
         setIsInitializing(false);
+        setHasCompletedOnboarding(null);
+        setHasCompletedTour(null);
       }
     });
 
@@ -126,6 +167,7 @@ const App: React.FC = () => {
         if (data.home_config) setHomeSections(data.home_config);
         if (data.placed_items) setPlacedItems(data.placed_items);
         if (data.user_profile) setUserProfile(data.user_profile);
+        if (data.focus_logs) setFocusLogs(data.focus_logs);
       } else {
         console.log('New user detected, initializing data...');
         // Need to get the latest session to get email/metadata safely
@@ -155,7 +197,8 @@ const App: React.FC = () => {
             name: currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Focus User',
             email: currentUser?.email || 'user@example.com',
             registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
-          }
+          },
+          focus_logs: []
         };
         const { error: insertError } = await supabase.from('users').insert(initialData);
         if (insertError) {
@@ -173,6 +216,9 @@ const App: React.FC = () => {
   };
 
   // Sync state to Supabase when it changes
+  // 注意：has_completed_onboarding 和 has_completed_tour 不在此 sync 中，
+  // 它們由 handleOnboardingComplete / handleTourComplete 直接更新，
+  // 避免 stale closure 覆蓋正確值。
   useEffect(() => {
     if (!user || isLoadingData) return;
     const syncData = async () => {
@@ -183,8 +229,7 @@ const App: React.FC = () => {
           home_config: homeSections,
           placed_items: placedItems,
           user_profile: userProfile,
-          has_completed_onboarding: hasCompletedOnboarding,
-          has_completed_tour: hasCompletedTour,
+          focus_logs: focusLogs,
           auth_provider: user.app_metadata.provider || 'email'
         }).eq('id', user.id);
         
@@ -197,7 +242,7 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(syncData, 2000); // Debounce sync
     return () => clearTimeout(timer);
-  }, [coins, tasks, homeSections, placedItems, userProfile, hasCompletedOnboarding, user, isLoadingData]);
+  }, [coins, tasks, homeSections, placedItems, userProfile, focusLogs, user, isLoadingData]);
 
   const MAX_COINS = 9999;
 
@@ -384,15 +429,19 @@ const App: React.FC = () => {
       case AppRoute.PROFILE_NOTIFICATIONS:
         return <NotificationsView navigateTo={navigateTo} />;
       case AppRoute.PROFILE_EDIT:
-        return <EditProfileView navigateTo={navigateTo} userProfile={userProfile} setUserProfile={setUserProfile} />;
+        return <EditProfileView navigateTo={navigateTo} userProfile={userProfile} setUserProfile={setUserProfile} setCalendarEvents={setCalendarEvents} />;
       case AppRoute.PROFILE_ARCHIVE:
         return <ArchiveView navigateTo={navigateTo} />;
       case AppRoute.PROFILE_ARCHIVED_REMINDERS:
         return <ArchivedRemindersView navigateTo={navigateTo} archivedTasks={archivedTasks} />;
       case AppRoute.CHANGE_EMAIL:
         return <ChangeEmailView navigateTo={navigateTo} userProfile={userProfile} setUserProfile={setUserProfile} />;
+      case AppRoute.FOCUS_ANALYSIS:
+        return <FocusAnalysisView navigateTo={navigateTo} focusLogs={focusLogs} />;
+      case AppRoute.CALENDAR_ADMIN:
+        return <CalendarAdminView navigateTo={navigateTo} events={calendarEvents} setEvents={setCalendarEvents} />;
       default:
-        return <HomeView navigateTo={navigateTo} tasks={tasks} setTasks={setTasks} toggleTask={toggleTask} archiveTask={archiveTask} calendarEvents={calendarEvents} sections={homeSections} setSections={setHomeSections} userProfile={userProfile} />;
+        return <HomeView navigateTo={navigateTo} tasks={tasks} setTasks={setTasks} toggleTask={toggleTask} archiveTask={archiveTask} calendarEvents={calendarEvents} sections={homeSections} setSections={setHomeSections} userProfile={userProfile} focusLogs={focusLogs} />;
     }
   };
 
@@ -434,6 +483,12 @@ const App: React.FC = () => {
   const handleTourComplete = async () => {
     setIsTourVisible(false);
     setHasCompletedTour(true);
+    
+    // Smoothly scroll back to top after tour is finished
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     if (user) {
       try {
         await supabase.from('users').update({ has_completed_tour: true }).eq('id', user.id);
@@ -470,6 +525,7 @@ const App: React.FC = () => {
         winsTowardsNextLevel: 0,
         visitedRoutes: [AppRoute.HOME],
         email: 'user@example.com',
+        identity: 'other' as UserIdentity,
         registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       });
       
@@ -527,6 +583,7 @@ const App: React.FC = () => {
         winsTowardsNextLevel: 0,
         visitedRoutes: [AppRoute.HOME],
         email: 'user@example.com',
+        identity: 'other' as UserIdentity,
         registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       });
       

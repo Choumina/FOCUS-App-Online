@@ -3,7 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
 import { LogIn, Sparkles, ShieldCheck, Zap, Loader2, Mail, Lock, UserPlus, ArrowLeft, Chrome } from 'lucide-react';
 
-const LoginView: React.FC = () => {
+interface LoginViewProps {
+  onLoginStart?: () => void; // Optional callback
+}
+
+const LoginView: React.FC<LoginViewProps> = ({ onLoginStart }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loginMethod, setLoginMethod] = useState<'selection' | 'manual'>('selection');
   const [manualMode, setManualMode] = useState<'login' | 'signup'>('login');
@@ -12,7 +16,7 @@ const LoginView: React.FC = () => {
 
   const handleGoogleLogin = async () => {
     if (isLoading) return;
-    
+    if (onLoginStart) onLoginStart();
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -32,19 +36,39 @@ const LoginView: React.FC = () => {
     }
   };
 
+  const getAuthErrorMessage = (error: any): string => {
+    const msg = error?.message || '';
+    if (msg.includes('Invalid login credentials')) return '帳號或密碼錯誤，請重新確認。';
+    if (msg.includes('Email not confirmed')) return '請先前往您的信箱，點擊驗證連結後再登入。';
+    if (msg.includes('User already registered')) return '此 Email 已被註冊，請直接登入。';
+    if (msg.includes('Password should be')) return '密碼至少需要 6 個字元。';
+    if (msg.includes('Unable to validate email')) return 'Email 格式不正確，請重新輸入。';
+    if (msg.includes('rate limit')) return '嘗試次數過多，請稍後再試。';
+    if (msg.includes('Network')) return '網路連線異常，請檢查網路後再試。';
+    return `操作失敗：${msg}`;
+  };
+
   const handleManualAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading || !email || !password) return;
-
+    if (onLoginStart) onLoginStart();
     setIsLoading(true);
     try {
       if (manualMode === 'signup') {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
-        alert('註冊成功！請檢查您的信箱進行驗證（若有開啟驗證的話），或者直接嘗試登入。');
+        // 若 Supabase 未設定 email 驗證，signUp 會自動建立 session（auto-login）
+        // 立即登出，確保使用者必須手動登入，不會被自動帶入 App
+        if (data.session) {
+          await supabase.auth.signOut();
+          alert('註冊成功！請使用您的帳號密碼登入。');
+        } else {
+          // Supabase 要求 email 驗證 — data.session 為 null
+          alert('註冊成功！\n\n請前往您的信箱（' + email + '），\n點擊驗證連結後即可登入。');
+        }
         setManualMode('login');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
@@ -55,7 +79,7 @@ const LoginView: React.FC = () => {
       }
     } catch (error: any) {
       console.error("Manual auth failed:", error);
-      alert(`操作失敗: ${error.message}`);
+      alert(getAuthErrorMessage(error));
     } finally {
       setIsLoading(false);
     }

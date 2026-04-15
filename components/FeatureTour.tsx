@@ -7,36 +7,74 @@ interface TourStep {
   title: string;
   content: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
+  navigateTo?: string;
 }
 
 interface FeatureTourProps {
   steps: TourStep[];
   onComplete: () => void;
   isVisible: boolean;
+  onNavigate?: (route: string) => void;
 }
 
-const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible }) => {
+const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible, onNavigate }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, height: 0 });
+  const [isReady, setIsReady] = useState(false);
+
+  // 當 currentStep 改變，若有 navigateTo，通知上層切換路由
+  useEffect(() => {
+    if (isVisible && steps[currentStep]?.navigateTo && onNavigate) {
+      onNavigate(steps[currentStep].navigateTo!);
+    }
+  }, [currentStep, steps, isVisible, onNavigate]);
+
+  const mounted = React.useRef(true);
+  useEffect(() => {
+    return () => { mounted.current = false; };
+  }, []);
 
   const updateCoords = () => {
     const step = steps[currentStep];
-    const el = document.getElementById(step.targetId);
-    if (el) {
-      // Scroll into view instantly to ensure accurate measurement
-      el.scrollIntoView({ behavior: 'auto', block: 'center' });
+    if (!step || !isVisible || !mounted.current) return;
+
+    setIsReady(false); // Reset readiness when calculating new coords
+
+    const attemptUpdate = (retryLeft: number) => {
+      if (!mounted.current || !isVisible) return;
       
-      const rect = el.getBoundingClientRect();
-      setCoords({
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height
-      });
-    }
+      const el = document.getElementById(step.targetId);
+      if (el) {
+        // Must use 'auto' (instant) so that we don't capture coords mid-scroll
+        el.scrollIntoView({ behavior: 'auto', block: 'center' }); 
+        
+        // Wait for next frame layout to complete
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            if (!mounted.current || !isVisible) return;
+            const rect = el.getBoundingClientRect();
+            // 由於外容器為 fixed，這裡的 viewport 座標可以直接拿來用
+            setCoords({
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              height: rect.height
+            });
+            setIsReady(true);
+          }, 50); // Small delay to guarantee reflow
+        });
+      } else if (retryLeft > 0) {
+        setTimeout(() => attemptUpdate(retryLeft - 1), 100);
+      } else {
+        console.warn(`FeatureTour: Could not find target ${step.targetId} after all retries.`);
+      }
+    };
+    
+    // Increased retries to 30 (3 seconds). Some route transitions or data fetches can take a moment.
+    attemptUpdate(30); 
   };
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (isVisible) {
       updateCoords();
     }
@@ -55,7 +93,6 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
     if (currentStep < steps.length - 1) {
       setCurrentStep(prev => prev + 1);
     } else {
-      // Final confirmation before completion
       if (window.confirm('導覽已結束，準備好開啟您的專注之旅了嗎？')) {
         onComplete();
       }
@@ -63,7 +100,7 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
   };
 
   return (
-    <div className="fixed inset-0 z-[300]">
+    <div className={`fixed inset-0 z-[300] transition-opacity duration-300 ${isReady ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
       {/* Backdrop with hole */}
       <div className="absolute inset-0 bg-black/60 transition-all duration-500" style={{
         clipPath: `polygon(0% 0%, 0% 100%, ${coords.left}px 100%, ${coords.left}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top + coords.height}px, ${coords.left}px ${coords.top + coords.height}px, ${coords.left}px 100%, 100% 100%, 100% 0%)`
@@ -73,10 +110,10 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
       <motion.div
         initial={false}
         animate={{
-          top: coords.top - 4,
-          left: coords.left - 4,
-          width: coords.width + 8,
-          height: coords.height + 8,
+          top: coords.top - 8,
+          left: coords.left - 8,
+          width: coords.width + 16,
+          height: coords.height + 16,
         }}
         className="absolute border-2 border-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.5)] pointer-events-none"
       >
@@ -92,10 +129,6 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible 
         <motion.div
           key={currentStep}
           initial={{ opacity: 0, y: 10, scale: 0.95 }}
-          animate={{ 
-            opacity: 1, 
-            y: 0, 
-            scale: 1,
           animate={{ 
             opacity: 1, 
             y: 0, 

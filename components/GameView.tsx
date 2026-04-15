@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AppRoute, Item } from '../types';
-import { ChevronLeft, Plus, DollarSign } from 'lucide-react';
+import { ChevronLeft, Plus, DollarSign, Sparkles, Heart, Target, ShoppingBag, Layers, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface GameViewProps {
@@ -261,14 +261,22 @@ const GameView: React.FC<GameViewProps> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <header className="p-6 flex items-center justify-center relative">
-        <button onClick={() => navigateTo(AppRoute.HOME)} className="absolute left-6 bg-white p-3 rounded-2xl shadow-sm">
-          <ChevronLeft size={24} />
+      <header className="px-6 pt-8 pb-4 flex items-center justify-between relative z-50">
+        <button 
+          onClick={() => navigateTo(AppRoute.HOME)} 
+          className="bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-sm border border-gray-100 hover:scale-110 active:scale-95 transition-all"
+        >
+          <ChevronLeft size={24} className="text-gray-600" />
         </button>
-        <h1 className="text-xl font-bold">寵物專區</h1>
-        <div className="absolute right-6 bg-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 border border-gray-100 z-50">
-          <span className="text-yellow-600 font-bold">💰</span>
-          <span className="font-bold">{coins}</span>
+        <div className="text-center">
+           <h1 className="text-2xl font-black tracking-tighter text-gray-800">PET SANCTUARY</h1>
+           <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mt-0.5">Focus Rewards</p>
+        </div>
+        <div className="bg-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 border border-yellow-100/50 group hover:scale-105 transition-all">
+          <div className="w-8 h-8 bg-gradient-to-tr from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-inner group-hover:rotate-12 transition-transform">
+             <DollarSign size={16} className="text-white font-bold" />
+          </div>
+          <span className="font-black text-gray-800 text-lg">{coins}</span>
         </div>
       </header>
 
@@ -283,8 +291,7 @@ const GameView: React.FC<GameViewProps> = ({
           </button>
         </div>
 
-        {/* Areas Container */}
-        <div className="relative">
+        <div id="game-pet-area" className="relative">
           <div 
             ref={scrollContainerRef}
             className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scroll-smooth"
@@ -315,12 +322,14 @@ const GameView: React.FC<GameViewProps> = ({
           </div>
 
           {/* Pagination Dots */}
-          <div className="flex justify-center gap-2 mt-2">
+          <div className="flex justify-center gap-3 mt-4">
             {activeAreas.map((areaId) => (
               <div 
                 key={areaId}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  currentAreaId === areaId ? 'w-4 bg-blue-500' : 'bg-gray-300'
+                className={`transition-all duration-500 rounded-full ${
+                  currentAreaId === areaId 
+                    ? 'w-8 h-2 bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]' 
+                    : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'
                 }`}
               />
             ))}
@@ -328,46 +337,57 @@ const GameView: React.FC<GameViewProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 bg-white rounded-t-[3rem] p-6">
-        <div className="bg-gray-100 rounded-full flex p-1 mb-6">
+      <div className="flex-1 bg-white rounded-t-[3.5rem] p-8 shadow-[0_-20px_40px_rgba(0,0,0,0.02)] border-t border-gray-100">
+        <div className="bg-gray-100/80 backdrop-blur-sm rounded-[2rem] flex p-1.5 mb-8 border border-gray-200/50">
           <button 
             onClick={() => setActiveTab('items')}
-            className={`flex-1 py-2 text-sm font-bold rounded-full transition-all ${activeTab === 'items' ? 'bg-white shadow-sm' : 'text-gray-400'}`}
+            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'items' ? 'bg-white text-blue-600 shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}
           >
+            <ShoppingBag size={14} />
             Items
           </button>
           <button 
             onClick={() => setActiveTab('backgrounds')}
-            className={`flex-1 py-2 text-sm font-bold rounded-full transition-all ${activeTab === 'backgrounds' ? 'bg-white shadow-sm' : 'text-gray-400'}`}
+            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'backgrounds' ? 'bg-white text-indigo-600 shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}
           >
-            Backgrounds
+            <Layers size={14} />
+            Ecology
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-5">
           {(activeTab === 'items' ? ITEMS : BACKGROUNDS).map(item => (
             <button 
               key={item.id}
               onClick={() => buyItem(item)}
-              className="bg-gray-50 p-4 rounded-3xl flex flex-col items-center border border-gray-100 hover:bg-white hover:shadow-md transition-all active:scale-95"
+              className="group bg-white p-5 rounded-[2.5rem] flex flex-col items-center border-2 border-gray-50 shadow-sm hover:shadow-2xl hover:border-blue-100 transition-all active:scale-95 relative overflow-hidden"
             >
-              <p className="text-sm font-bold mb-2 text-gray-700">{item.name}</p>
-              <div className="h-16 flex items-center justify-center mb-2 overflow-hidden rounded-xl">
+              <div className="absolute top-0 right-0 p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <Sparkles size={12} className="text-yellow-400" />
+              </div>
+              
+              <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">
+                 {item.type === 'asset' ? (item.id.startsWith('a') ? 'Animal' : item.id.startsWith('f') ? 'Food' : 'Toy') : 'Space'}
+              </p>
+              <h4 className="text-sm font-black text-gray-800 mb-4">{item.name}</h4>
+              
+              <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 overflow-hidden shadow-inner border border-gray-100">
                 {item.type === 'background' ? (
                   item.id === 'default' ? (
-                    <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-2xl">
-                      {item.image}
+                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-2xl text-white">
+                       {item.image}
                     </div>
                   ) : (
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   )
                 ) : (
-                  <span className="text-4xl">{item.image}</span>
+                  <span className="text-5xl drop-shadow-lg">{item.image}</span>
                 )}
               </div>
-              <div className="flex items-center gap-1 text-xs font-bold text-yellow-700">
+              
+              <div className="flex items-center gap-1 bg-yellow-400/10 px-4 py-1.5 rounded-full border border-yellow-400/20">
                 {item.type === 'background' && (item.id === 'default' || purchasedBackgrounds.includes(item.id)) ? (
-                  <span className="text-blue-500">
+                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
                     {item.id === 'default' 
                       ? (!areaBackgrounds[currentAreaId] ? 'Active' : 'Apply')
                       : (areaBackgrounds[currentAreaId] === item.id ? 'Active' : 'Apply')
@@ -375,8 +395,8 @@ const GameView: React.FC<GameViewProps> = ({
                   </span>
                 ) : (
                   <>
-                    <span>💰</span>
-                    <span>{item.price}</span>
+                    <Star size={10} className="text-yellow-600 fill-yellow-600" />
+                    <span className="text-xs font-black text-yellow-700">{item.price}</span>
                   </>
                 )}
               </div>
@@ -406,35 +426,45 @@ const AreaBox: React.FC<AreaBoxProps> = ({ areaId, items, handleEmojiClick, remo
   const [showRemove, setShowRemove] = useState(false);
   const hoverTimer = useRef<any>(null);
 
-  const getGradient = () => {
-    switch (areaId) {
-      case 'yellow': return 'from-yellow-200 to-yellow-400';
-      case 'green': return 'from-green-200 to-green-400';
-      default: return 'from-cyan-300 to-blue-400';
-    }
-  };
-
   const handleMouseEnter = () => {
-    if (areaId === 'blue') return;
-    hoverTimer.current = setTimeout(() => {
-      setShowRemove(true);
-    }, 2000);
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    setShowRemove(true);
   };
 
   const handleMouseLeave = () => {
-    if (hoverTimer.current) {
-      clearTimeout(hoverTimer.current);
-    }
-    setShowRemove(false);
+    hoverTimer.current = setTimeout(() => setShowRemove(false), 300);
   };
+
+  const getAreaStyle = () => {
+    switch (areaId) {
+      case 'yellow': return {
+        gradient: 'from-amber-100 via-yellow-200 to-orange-200',
+        pattern: 'opacity-10',
+        patternPath: 'M0 0h20v20H0z'
+      };
+      case 'green': return {
+        gradient: 'from-emerald-100 via-green-200 to-teal-200',
+        pattern: 'opacity-10',
+        patternPath: 'M0 0l10 10m0-10L0 10'
+      };
+      default: return {
+        gradient: 'from-sky-100 via-blue-200 to-indigo-200',
+        pattern: 'opacity-10',
+        patternPath: 'M0 10h20M10 0v20'
+      };
+    }
+  };
+
+  const areaStyle = getAreaStyle();
 
   return (
     <div 
       ref={containerRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`relative flex-shrink-0 w-full aspect-square rounded-[3rem] shadow-inner overflow-hidden border-[8px] border-white touch-none snap-center`}
+      className={`relative flex-shrink-0 w-full aspect-square rounded-[3.5rem] shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)] overflow-hidden border-[12px] border-white touch-none snap-center transform transition-transform`}
     >
+      {/* Dynamic Themed Background */}
       {background ? (
         <img 
           src={background.image} 
@@ -443,8 +473,13 @@ const AreaBox: React.FC<AreaBoxProps> = ({ areaId, items, handleEmojiClick, remo
           referrerPolicy="no-referrer"
         />
       ) : (
-        <div className={`absolute inset-0 bg-gradient-to-b ${getGradient()}`} />
+        <div className={`absolute inset-0 bg-gradient-to-br ${areaStyle.gradient}`}>
+           <div className={`absolute inset-0 ${areaStyle.pattern}`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${areaStyle.patternPath}' fill='%23000' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E")` }} />
+        </div>
       )}
+      
+      {/* Glowing Ambient Light */}
+      <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
 
       {/* Area Name Input */}
       <div className="absolute top-6 right-6 z-40">
@@ -513,15 +548,18 @@ const EmojiItem: React.FC<EmojiItemProps> = ({ item, handleEmojiClick, removeEmo
     <motion.div 
       ref={itemRef}
       onTap={handleTap}
-      animate={{
-        scale: item.isReacting ? [1, 1.4, 1] : 1,
-        rotate: item.isReacting ? [0, 15, -15, 0] : 0,
+      initial={{ scale: 0 }}
+      animate={{ 
+        scale: item.isReacting ? [1, 1.4, 1] : [1, 1.05, 1],
+        rotate: item.isReacting ? [0, 20, -20, 0] : 0,
+        y: item.isReacting ? [0, -10, 0] : [0, -3, 0]
       }}
       transition={{ 
-        scale: { duration: 0.5 },
+        scale: { duration: item.isReacting ? 0.3 : 2, repeat: item.isReacting ? 0 : Infinity },
         rotate: { duration: 0.5 },
+        y: { duration: item.isReacting ? 0.3 : 2.5, repeat: item.isReacting ? 0 : Infinity }
       }}
-      className="absolute text-4xl z-30 flex items-center justify-center select-none w-12 h-12"
+      className="absolute z-30 flex items-center justify-center select-none group/pet cursor-pointer"
       style={{ 
         left: `${item.x}%`, 
         top: `${item.y}%`,
@@ -530,22 +568,56 @@ const EmojiItem: React.FC<EmojiItemProps> = ({ item, handleEmojiClick, removeEmo
       }}
     >
       <div className="relative">
-        {item.char}
+        <div className="text-5xl drop-shadow-xl filter group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] transition-all">
+          {item.char}
+        </div>
+        
+        {/* Level Toast based on Click Count */}
+        <AnimatePresence>
+           {item.isReacting && (
+             <motion.div
+               initial={{ y: 0, opacity: 0, scale: 0.5 }}
+               animate={{ y: -60, opacity: 1, scale: 1.2 }}
+               exit={{ y: -80, opacity: 0 }}
+               className="absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap"
+             >
+                <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-full shadow-lg border border-pink-100 flex items-center gap-1">
+                   <Heart size={14} className="text-pink-500 fill-pink-500" />
+                   <span className="text-[10px] font-black text-pink-600">LV.{Math.floor((item.clickCount || 0) / 5) + 1}</span>
+                </div>
+             </motion.div>
+           )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {item.isReacting && (
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ 
                 opacity: [0, 1, 0],
-                scale: [0.8, 1.3, 1.5],
+                scale: [0.8, 1.5, 2],
               }}
               exit={{ opacity: 0 }}
-              className="absolute -inset-3 border-4 border-yellow-400 rounded-full pointer-events-none z-[-1]"
-              style={{ 
-                boxShadow: '0 0 20px rgba(251, 191, 36, 0.9)',
-                filter: 'blur(1px)'
-              }}
-            />
+              className="absolute inset-0 flex items-center justify-center pointer-events-none z-[-1]"
+            >
+               <div className="relative w-full h-full">
+                  {[...Array(6)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ 
+                        x: Math.cos(i * 60 * Math.PI / 180) * 40,
+                        y: Math.sin(i * 60 * Math.PI / 180) * 40,
+                        opacity: 0,
+                        scale: 0.5
+                      }}
+                      transition={{ duration: 0.6 }}
+                      className="absolute text-lg"
+                    >
+                       ❤️
+                    </motion.div>
+                  ))}
+               </div>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, Play, QrCode } from 'lucide-react';
+import { ChevronLeft, Play, QrCode, Zap, Trophy, Flag, Coins, Star, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface RaceTrackViewProps {
@@ -97,81 +97,149 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
   };
 
   return (
-    <div className="p-6 bg-white min-h-screen">
-      <header className="flex items-center justify-center relative mb-8">
-        <button onClick={() => navigateTo(AppRoute.HOME)} className="absolute left-0 bg-gray-100 p-3 rounded-2xl">
-          <ChevronLeft size={24} />
+    <div className="p-0 bg-gray-50 min-h-screen">
+      <header className="px-6 pt-8 pb-4 flex items-center justify-between relative z-50">
+        <button 
+          onClick={() => navigateTo(AppRoute.HOME)} 
+          className="bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-sm border border-gray-100 hover:scale-110 active:scale-95 transition-all"
+        >
+          <ChevronLeft size={24} className="text-gray-600" />
         </button>
-        <h1 className="text-2xl font-bold">賽馬場</h1>
-        <div className="absolute right-0 bg-white px-4 py-2 rounded-full shadow-sm flex items-center gap-2 border">
-          <span className="text-yellow-600">💰</span>
-          <span className="font-bold">{coins}</span>
+        <div className="text-center">
+           <h1 className="text-2xl font-black tracking-tighter text-gray-800 italic uppercase">Race Arena</h1>
+           <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mt-0.5">High Stakes Betting</p>
+        </div>
+        <div className="bg-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 border border-yellow-100/50 group hover:scale-105 transition-all">
+          <div className="w-8 h-8 bg-gradient-to-tr from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-inner group-hover:rotate-12 transition-transform">
+             <Coins size={16} className="text-white font-bold" />
+          </div>
+          <span className="font-black text-gray-800 text-lg">{coins}</span>
         </div>
       </header>
 
-      <div className={`rounded-[3rem] p-8 transition-colors duration-500 mb-8 relative overflow-hidden ${racing ? 'bg-green-300' : 'bg-gray-100'}`}>
-        {/* Finish Line */}
-        <div className="absolute top-0 bottom-0 right-12 w-1 border-r-2 border-dashed border-gray-400 z-0" />
-        
-        <div className="space-y-8 relative z-10">
-          {[1, 2, 3, 4, 5].map((h, i) => (
-            <div key={h} className="relative h-2 bg-gray-300 rounded-full">
-              {racing && <div className="absolute top-0 left-0 h-full bg-yellow-400 rounded-full" style={{ width: `${positions[i]}%` }} />}
-              
-              {/* Horse */}
-              <div 
-                className="absolute -top-6 text-4xl transition-all duration-100 ease-linear transform scale-x-[-1]"
-                style={{ left: `calc(${positions[i]}% - 20px)` }}
-              >
-                🏇
+      <div className="px-6 pb-8">
+        <div className={`rounded-[3.5rem] p-10 transition-all duration-700 mb-8 relative overflow-hidden border-[8px] border-white shadow-2xl ${racing ? 'bg-gray-900 border-emerald-500/30' : 'bg-gray-100'}`}>
+          {/* Animated Background Patern */}
+          <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255,255,255,0.1) 35px, rgba(255,255,255,0.1) 70px)' }} />
+          
+          {/* Finish Line Indicator */}
+          <div className="absolute top-0 bottom-0 right-16 w-8 bg-[repeating-linear-gradient(0deg,#fff,#fff_10px,#000_10px,#000_20px)] opacity-20 z-0" />
+          <div className="absolute top-1/2 right-4 -translate-y-1/2 flex flex-col items-center gap-2 z-10 opacity-40">
+             <Flag size={20} className={racing ? 'text-emerald-500' : 'text-gray-400'} />
+             <div className="text-[10px] font-black uppercase tracking-widest writing-mode-vertical" style={{ writingMode: 'vertical-rl' }}>Goal</div>
+          </div>
+          
+          <div className="space-y-10 relative z-10">
+            {[1, 2, 3, 4, 5].map((h, i) => (
+              <div key={h} className="relative h-3 bg-gray-200/50 rounded-full backdrop-blur-sm">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${positions[i]}%` }}
+                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.5)]" 
+                />
+                
+                {/* Horse with Gallop Animation */}
+                <motion.div 
+                  animate={racing ? {
+                    y: [0, -10, 0],
+                    rotate: [-10, 10, -10],
+                    scaleX: -1
+                  } : { scaleX: -1 }}
+                  transition={racing ? {
+                    y: { repeat: Infinity, duration: 0.3 },
+                    rotate: { repeat: Infinity, duration: 0.3 }
+                  } : {}}
+                  className="absolute -top-7 text-5xl transition-all duration-100 ease-linear drop-shadow-lg"
+                  style={{ left: `calc(${positions[i]}% - 25px)` }}
+                >
+                  🏇
+                </motion.div>
+
+                {/* Horse Number Label */}
+                <div className="absolute -left-8 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400">0{h}</div>
+
+                {/* Betting Marker for Horse */}
+                <button
+                  onClick={() => !racing && setSelectedHorse(i)}
+                  className={`absolute -right-12 -top-3 w-9 h-9 rounded-2xl flex items-center justify-center transition-all border-2 ${
+                    selectedHorse === i 
+                      ? 'bg-emerald-500 border-white text-white scale-110 shadow-xl rotate-12' 
+                      : 'bg-white border-gray-100 text-gray-300 hover:bg-emerald-50 hover:border-emerald-200'
+                  }`}
+                  disabled={racing}
+                >
+                   {selectedHorse === i ? <Star size={18} fill="white" /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />}
+                </button>
               </div>
-
-              {/* Betting Mark at the end */}
-              <button
-                onClick={() => !racing && setSelectedHorse(i)}
-                className={`absolute -right-10 -top-4 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                  selectedHorse === i 
-                    ? 'bg-yellow-500 text-white scale-110 shadow-lg' 
-                    : 'bg-white text-gray-300 hover:bg-gray-200'
-                }`}
-                disabled={racing}
-              >
-                <span className="text-xs font-bold">{selectedHorse === i ? '💰' : '○'}</span>
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="bg-gray-50 p-4 rounded-3xl flex justify-between items-center">
-          <span className="font-bold text-gray-600">下注金額 : 💰 {bet}</span>
-          <div className="flex flex-col">
-              <button onClick={() => setBet(b => b + 100)} className="text-blue-500">▲</button>
-              <button onClick={() => setBet(b => Math.max(0, b - 100))} className="text-blue-500">▼</button>
+            ))}
           </div>
         </div>
 
-        <div className="bg-gray-50 p-4 rounded-3xl flex justify-between items-center">
-          <span className="font-bold text-gray-600">加入我的賽馬場 : <span className="text-blue-500">0310</span></span>
-          <button className="bg-white p-2 rounded-xl shadow-sm"><QrCode size={20} /></button>
+        <div className="space-y-5">
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-gray-100 flex justify-between items-center group">
+            <div className="flex items-center gap-4">
+               <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-500 group-hover:rotate-12 transition-transform">
+                  <Coins size={24} />
+               </div>
+               <div>
+                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wager Amount</div>
+                  <div className="text-xl font-black text-gray-800">💰 {bet}</div>
+               </div>
+            </div>
+            <div className="flex gap-2">
+                <button 
+                  onClick={() => setBet(b => Math.max(100, b - 100))} 
+                  className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                >
+                  -
+                </button>
+                <button 
+                  onClick={() => setBet(b => b + 100)} 
+                  className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400 hover:bg-emerald-50 hover:text-emerald-500 transition-colors"
+                >
+                  +
+                </button>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+             <div className="flex-1 bg-white p-5 rounded-[2.5rem] shadow-xl border border-gray-100 flex items-center gap-3">
+                <div className="p-2.5 bg-blue-50 rounded-xl text-blue-500">
+                   <Target size={20} />
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="GAME CODE..." 
+                  value={gameCode}
+                  onChange={handleCodeChange}
+                  className="w-full bg-transparent text-sm font-black placeholder:text-gray-300 focus:outline-none"
+                />
+             </div>
+             <div className="bg-white px-5 rounded-[2rem] shadow-xl border border-gray-100 text-gray-400 flex items-center">
+                <QrCode size={24} />
+             </div>
+          </div>
+
+          <button 
+            onClick={startRace}
+            disabled={racing || selectedHorse === -1 || coins < bet}
+            className={`w-full py-6 rounded-[2.5rem] text-xl font-black uppercase tracking-widest shadow-2xl transition-all relative overflow-hidden flex items-center justify-center gap-3
+              ${racing 
+                ? 'bg-gray-200 text-gray-400' 
+                : (selectedHorse === -1 || coins < bet)
+                  ? 'bg-gray-800 text-gray-500 opacity-50 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:scale-[1.02] active:scale-95 shadow-emerald-200'
+              }
+            `}
+          >
+            {racing ? (
+               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
+                  <Zap size={24} />
+               </motion.div>
+            ) : <Play fill="white" size={24} />}
+            {racing ? 'Racing...' : (selectedHorse === -1 ? 'Select Horse' : 'Start Race')}
+          </button>
         </div>
-
-        <input 
-          type="text" 
-          placeholder="輸入遊戲代碼..." 
-          value={gameCode}
-          onChange={handleCodeChange}
-          className="w-full bg-gray-50 p-4 rounded-3xl border-none focus:ring-2 focus:ring-blue-400"
-        />
-
-        <button 
-          onClick={startRace}
-          disabled={racing}
-          className="w-full py-4 bg-blue-500 text-white rounded-full text-2xl font-bold shadow-xl flex items-center justify-center gap-3 disabled:bg-gray-300"
-        >
-          <Play fill="white" size={24} /> Play
-        </button>
       </div>
 
       {/* Result Animations */}

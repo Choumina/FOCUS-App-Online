@@ -1,16 +1,17 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { AppRoute, CalendarEvent } from '../types';
-import { ChevronLeft, List, Search, Plus, Calendar, ChevronRight } from 'lucide-react';
+import { ChevronLeft, List, Search, Plus, Calendar, ChevronRight, Settings2 } from 'lucide-react';
 
 interface CalendarDetailViewProps {
   navigateTo: (route: AppRoute) => void;
   events: CalendarEvent[];
   setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
   onAddEvent?: (callback: (indicatorTop: number) => void) => void;
+  isTourActive?: boolean;
 }
 
-const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, events, setEvents, onAddEvent }) => {
+const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, events, setEvents, onAddEvent, isTourActive }) => {
   const hours = Array.from({length: 25}, (_, i) => i.toString().padStart(2, '0') + ':00');
   const HOUR_HEIGHT = 40; // 1小時 = 40像素
   
@@ -18,6 +19,14 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
     const now = new Date();
     return (now.getHours() + now.getMinutes() / 60) * HOUR_HEIGHT;
   });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      setIndicatorTop((now.getHours() + now.getMinutes() / 60) * HOUR_HEIGHT);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
   const [currentTimeLabel, setCurrentTimeLabel] = useState(() => {
     const now = new Date();
     return `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -176,6 +185,13 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
   useEffect(() => {
     localStorage.setItem('calendar_view_mode', viewMode);
   }, [viewMode]);
+  
+  // 導覽期間，強制切換至月曆視圖以確保導覽氣泡能正確對齊元素
+  useEffect(() => {
+    if (isTourActive) {
+      setViewMode('month');
+    }
+  }, [isTourActive]);
 
   useEffect(() => {
     // 捲動日期列，讓選中日期置中
@@ -221,6 +237,13 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
                   {viewMode === 'day' ? <Calendar size={18}/> : <List size={18}/>}
                 </button>
                 <button className="p-2 text-gray-600 hover:bg-white hover:rounded-full transition-all"><Search size={18}/></button>
+                <button
+                  onClick={() => navigateTo(AppRoute.CALENDAR_ADMIN)}
+                  className="p-2 text-gray-600 hover:bg-white hover:rounded-full transition-all"
+                  title="後台管理"
+                >
+                  <Settings2 size={18}/>
+                </button>
             </div>
         </div>
         
@@ -419,7 +442,7 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-2 mb-4">
+          <div id="calendar-grid" className="grid grid-cols-7 gap-2 mb-4">
             {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(wd => (
               <div key={wd} className="text-center text-[10px] font-bold text-gray-400 uppercase py-2">
                 {wd}
@@ -463,7 +486,7 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
             })()}
           </div>
           
-          <div className="mt-8">
+          <div id="calendar-events" className="mt-8">
             <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Events for {selectedDate}</h3>
             <div className="space-y-3">
               {events.filter(e => e.date === `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${selectedDate.toString().padStart(2, '0')}`).length > 0 ? (

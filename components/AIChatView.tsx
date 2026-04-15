@@ -1,10 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AppRoute } from '../types';
-import { Search, Mic, Send, Sparkles, Home, RotateCcw, Calendar, CheckCircle2, Plus, X, Maximize2 } from 'lucide-react';
+import { Send, Sparkles, Home, RotateCcw, Plus, X, Maximize2, Zap } from 'lucide-react';
 import { chatWithAssistant } from '../geminiService';
 import { CalendarEvent, Task } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, ReferenceLine } from 'recharts';
+import ConfirmationModal from './ConfirmationModal';
 
 interface Message {
   role: 'user' | 'bot';
@@ -12,6 +14,13 @@ interface Message {
   type?: 'form_schedule' | 'form_task' | 'form_matrix_confirm' | 'form_matrix_input';
   isSubmitted?: boolean;
   matrixData?: any[];
+}
+
+interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  updatedAt: number;
 }
 
 const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
@@ -181,14 +190,33 @@ const AIChatView: React.FC<{
   setCalendarEvents?: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
   tasks?: Task[];
 }> = ({ navigateTo, setCalendarEvents, tasks = [] }) => {
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const saved = localStorage.getItem('focus_ai_messages');
-    return saved ? JSON.parse(saved) : [];
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    try {
+      const saved = localStorage.getItem('focus_ai_conversations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load AI conversations", e);
+    }
+    return [];
   });
+  
+  const [currentConvId, setCurrentConvId] = useState<string | null>(() => {
+    const saved = localStorage.getItem('focus_ai_current_conv_id');
+    return saved || null;
+  });
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showEnterHint, setShowEnterHint] = useState(false);
   
+  // Current messages derived from conversations
+  const currentConversation = conversations.find(c => c.id === currentConvId);
+  const messages = currentConversation?.messages || [];
+
   // Form states
   const [scheduleForm, setScheduleForm] = useState({
     wakeTime: '',
@@ -209,21 +237,99 @@ const AIChatView: React.FC<{
   }>({
     tasks: []
   });
+  
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingConvId, setDeletingConvId] = useState<string | null>(null);
 
   const lastEnterTime = useRef<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Sync with localStorage
   useEffect(() => {
-    localStorage.setItem('focus_ai_messages', JSON.stringify(messages));
+    localStorage.setItem('focus_ai_conversations', JSON.stringify(conversations));
+  }, [conversations]);
+
+  useEffect(() => {
+    if (currentConvId) {
+      localStorage.setItem('focus_ai_current_conv_id', currentConvId);
+    } else {
+      localStorage.removeItem('focus_ai_current_conv_id');
+    }
+  }, [currentConvId]);
+
+  useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isTyping]);
+
+  const updateMessages = (newMessages: Message[] | ((prev: Message[]) => Message[])) => {
+    if (!currentConvId) {
+      // Create new conversation if none exists
+      const newId = Date.now().toString();
+      const initialMsgs = typeof newMessages === 'function' ? newMessages([]) : newMessages;
+      const firstMsgText = initialMsgs[0]?.text || '新對話';
+      const newConv: Conversation = {
+        id: newId,
+        title: firstMsgText.slice(0, 15) + (firstMsgText.length > 15 ? '...' : ''),
+        messages: initialMsgs,
+        updatedAt: Date.now()
+      };
+      setConversations(prev => [newConv, ...prev]);
+      setCurrentConvId(newId);
+      return;
+    }
+
+    setConversations(prev => prev.map(c => {
+      if (c.id === currentConvId) {
+        const msgs = typeof newMessages === 'function' ? newMessages(c.messages) : newMessages;
+        let newTitle = c.title;
+        // If it was "新對話" or empty, update title based on first user message
+        if ((c.title === '新對話' || c.messages.length === 0) && msgs.length > 0) {
+          const firstUserMsg = msgs.find(m => m.role === 'user');
+          if (firstUserMsg) {
+            newTitle = firstUserMsg.text.slice(0, 15) + (firstUserMsg.text.length > 15 ? '...' : '');
+          }
+        }
+        return { ...c, messages: msgs, updatedAt: Date.now(), title: newTitle };
+      }
+      return c;
+    }));
+  };
+
+  const handleNewChat = () => {
+    const newId = Date.now().toString();
+    const newConv: Conversation = {
+      id: newId,
+      title: '新對話',
+      messages: [],
+      updatedAt: Date.now()
+    };
+    setConversations(prev => [newConv, ...prev]);
+    setCurrentConvId(newId);
+    setIsSidebarOpen(false);
+    setInput('');
+  };
+
+  const handleDeleteChat = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingConvId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteChat = () => {
+    if (deletingConvId) {
+      setConversations(prev => prev.filter(c => c.id !== deletingConvId));
+      if (currentConvId === deletingConvId) {
+        setCurrentConvId(null);
+      }
+      setShowDeleteConfirm(false);
+      setDeletingConvId(null);
+    }
+  };
 
   const handleReset = () => {
-    setMessages([]);
-    localStorage.removeItem('focus_ai_messages');
-    // Reset forms too
-    setScheduleForm({ wakeTime: '', sleepDuration: '', commuteTime: '', goals: '' });
-    setTaskForm({ taskName: '', format: '', startTime: '', endTime: '' });
+    if (currentConvId) {
+      updateMessages([]);
+    }
   };
 
   const handleSend = async (customMsg?: string) => {
@@ -233,12 +339,13 @@ const AIChatView: React.FC<{
     if (!customMsg) setInput('');
     setShowEnterHint(false);
     
-    setMessages(prev => [...prev, { role: 'user', text: msgToSend }]);
+    // Add user message
+    updateMessages(prev => [...prev, { role: 'user', text: msgToSend }]);
     setIsTyping(true);
 
     if (msgToSend === '分析日常行程') {
       setTimeout(() => {
-        setMessages(prev => [...prev, { 
+        updateMessages(prev => [...prev, { 
           role: 'bot', 
           text: '好的～請幫我填入下列的資料！',
           type: 'form_schedule'
@@ -248,7 +355,7 @@ const AIChatView: React.FC<{
       return;
     } else if (msgToSend === '拆解學習任務') {
       setTimeout(() => {
-        setMessages(prev => [...prev, { 
+        updateMessages(prev => [...prev, { 
           role: 'bot', 
           text: '當然沒問題，你想拆解的任務是什麼呢？\n\n請告訴我它最終要以何種形式呈現呢？\n以及它開始執行、結束執行的時間。',
           type: 'form_task'
@@ -265,7 +372,7 @@ const AIChatView: React.FC<{
         }));
         setMatrixForm({ tasks: currentTasks });
         
-        setMessages(prev => [...prev, { 
+        updateMessages(prev => [...prev, { 
           role: 'bot', 
           text: `我看到你目前有 ${currentTasks.length} 個待辦事項：\n${currentTasks.map(t => `• ${t.title}`).join('\n')}\n\n請問未來的任務是否只有這些呢？`,
           type: 'form_matrix_confirm'
@@ -276,24 +383,28 @@ const AIChatView: React.FC<{
     }
 
     const response = await chatWithAssistant(msgToSend, messages);
-    setMessages(prev => [...prev, { role: 'bot', text: response.text }]);
+    updateMessages(prev => [...prev, { role: 'bot', text: response.text }]);
     
     if (response.events && response.events.length > 0 && setCalendarEvents) {
       setCalendarEvents(prev => {
         const newEvents = [...prev];
+        const HOUR_HEIGHT = 40;
         response.events.forEach((e: any) => {
           if (e.startTime && e.endTime) {
-            const startParts = e.startTime.split(':');
-            const endParts = e.endTime.split(':');
+            const startParts = e.startTime.trim().split(':');
+            const endParts = e.endTime.trim().split(':');
             if (startParts.length === 2 && endParts.length === 2) {
               const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
               const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+              
+              const dateToUse = e.date || new Date().toISOString().split('T')[0];
+              
               newEvents.push({
-                id: Date.now().toString() + Math.random(),
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                 title: e.title,
-                date: e.date,
-                top: startMinutes,
-                height: endMinutes - startMinutes,
+                date: dateToUse,
+                top: (startMinutes / 60) * HOUR_HEIGHT,
+                height: Math.max(20, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT),
                 color: 'bg-blue-100'
               });
             }
@@ -311,23 +422,23 @@ const AIChatView: React.FC<{
     let prompt = '';
     if (type === 'schedule') {
       prompt = `使用者提供了日常行程資料：\n1. 起床時間：${scheduleForm.wakeTime}\n2. 睡眠需求：${scheduleForm.sleepDuration}\n3. 通勤時間：${scheduleForm.commuteTime}\n4. 想完成的事：${scheduleForm.goals}\n\n請分析並安排行程，並以「行程安排：[內容]」的格式回覆。`;
-      setMessages(prev => prev.map((m, idx) => 
+      updateMessages(prev => prev.map((m, idx) => 
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     } else if (type === 'task') {
       prompt = `使用者提供了學習任務資料：\n1. 任務名稱：${taskForm.taskName}\n2. 呈現形式：${taskForm.format}\n3. 開始時間：${taskForm.startTime}\n4. 結束時間：${taskForm.endTime}\n\n請拆解此任務，並以「任務拆解：[內容]」的格式回覆。`;
-      setMessages(prev => prev.map((m, idx) => 
+      updateMessages(prev => prev.map((m, idx) => 
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     } else if (type === 'matrix') {
       prompt = `使用者提供了任務重要性與緊急度評分（1-5）：\n${matrixForm.tasks.map(t => `- ${t.title}: 重要性 ${t.importance}, 緊急度 ${t.urgency}`).join('\n')}\n\n請根據這些評分進行艾森豪矩陣分析，並在 matrixData 欄位中回傳這些資料。`;
-      setMessages(prev => prev.map((m, idx) => 
+      updateMessages(prev => prev.map((m, idx) => 
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     }
 
     const response = await chatWithAssistant(prompt, messages);
-    setMessages(prev => [...prev, { 
+    updateMessages(prev => [...prev, { 
       role: 'bot', 
       text: response.text,
       matrixData: response.matrixData 
@@ -336,20 +447,24 @@ const AIChatView: React.FC<{
     if (response.events && response.events.length > 0 && setCalendarEvents) {
       setCalendarEvents(prev => {
         const newEvents = [...prev];
+        const HOUR_HEIGHT = 40;
         response.events.forEach((e: any) => {
           if (e.startTime && e.endTime) {
-            const startParts = e.startTime.split(':');
-            const endParts = e.endTime.split(':');
+            const startParts = e.startTime.trim().split(':');
+            const endParts = e.endTime.trim().split(':');
             if (startParts.length === 2 && endParts.length === 2) {
               const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
               const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+              
+              const dateToUse = e.date || new Date().toISOString().split('T')[0];
+
               newEvents.push({
-                id: Date.now().toString() + Math.random(),
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                 title: e.title,
-                date: e.date,
-                top: startMinutes,
-                height: endMinutes - startMinutes,
-                color: 'bg-blue-100'
+                date: dateToUse,
+                top: (startMinutes / 60) * HOUR_HEIGHT,
+                height: Math.max(20, ((endMinutes - startMinutes) / 60) * HOUR_HEIGHT),
+                color: 'bg-indigo-100'
               });
             }
           }
@@ -412,371 +527,316 @@ const AIChatView: React.FC<{
   };
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      <header className="p-4 flex items-center justify-between border-b border-gray-100 bg-white sticky top-0 z-10">
-        <div className="w-8"></div> {/* Spacer for centering */}
-        <div className="flex items-center gap-2">
-            <Sparkles className="text-indigo-500" size={20} fill="currentColor" fillOpacity={0.2} />
-            <h1 className="text-lg font-bold text-indigo-600 tracking-tight">FOCUS AI</h1>
-        </div>
-        <button 
-          onClick={handleReset}
-          className="p-2 text-gray-300 hover:text-red-400 transition-colors"
-          title="重置對話"
-        >
-          <RotateCcw size={18} />
-        </button>
-      </header>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8">
-        {/* Welcome Header - Always visible at the top */}
-        <div className="text-center py-10 animate-in fade-in slide-in-from-top-4 duration-700">
-            <h2 className="text-5xl font-black text-blue-500/80 mb-4 tracking-tighter">FOCUS AI</h2>
-            <p className="text-gray-400 text-xs font-medium">「組織你的學術任務。輸入你的任務目標或每日行程。」</p>
-        </div>
-
-        {/* Initial Bot Message - Shown when no messages exist */}
-        {messages.length === 0 && (
-          <div className="flex justify-start animate-in fade-in slide-in-from-left-4 duration-500 delay-300">
-            <div className="max-w-[90%] p-4 rounded-3xl shadow-sm text-base font-medium bg-gray-100/80 text-gray-800 rounded-tl-none">
-              你好！我是 FOCUS AI。今天有什麼我可以幫你安排的任務嗎？
-            </div>
-          </div>
+    <div className="flex h-[100dvh] bg-white relative overflow-hidden font-sans">
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={confirmDeleteChat}
+        title="刪除對話紀錄？"
+        message="確定要刪除這筆對話紀錄嗎？此操作無法復原。"
+        confirmText="刪除"
+        type="danger"
+      />
+      {/* Sidebar Overlay for Mobile */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+          />
         )}
+      </AnimatePresence>
 
-        {messages.map((m, i) => (
-          <div key={i} className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-[90%] p-4 rounded-3xl shadow-sm text-base font-medium whitespace-pre-wrap leading-relaxed ${m.role === 'user' ? 'bg-blue-500 text-white rounded-tr-none' : 'bg-gray-100/80 text-gray-800 rounded-tl-none'}`}>
-              {m.text}
-              
-              {m.role === 'bot' && m.matrixData && (
-                <MatrixChart data={m.matrixData} />
-              )}
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 w-72 bg-[#F8F9FA] border-r border-gray-200 z-[70] transform transition-all duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} md:relative md:translate-x-0 ${!isSidebarOpen && 'md:w-0 md:opacity-0 md:overflow-hidden'}`}>
+        <div className="p-4 flex items-center justify-between">
+          <button 
+            onClick={handleNewChat}
+            className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 py-3.5 px-4 rounded-2xl font-bold text-sm shadow-sm hover:bg-gray-50 active:scale-95 transition-all"
+          >
+            <Plus size={18} className="text-blue-500" />
+            新對話
+          </button>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="md:hidden p-3 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
 
-              {m.role === 'bot' && m.type === 'form_matrix_confirm' && !m.isSubmitted && (
-                <div className="mt-6 flex gap-3">
-                  <button 
-                    onClick={() => {
-                      setMessages(prev => [...prev, { role: 'user', text: '是的，只有這些。' }]);
-                      setMessages(prev => [...prev, { 
-                        role: 'bot', 
-                        text: '好的，請為這些任務進行評分（1-5 分）：',
-                        type: 'form_matrix_input'
-                      }]);
-                    }}
-                    className="flex-1 py-3 bg-indigo-500 text-white rounded-2xl text-sm font-bold shadow-lg hover:bg-indigo-600 transition-all"
-                  >
-                    是的
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setMessages(prev => [...prev, { role: 'user', text: '不，我還有其他任務。' }]);
-                      setMessages(prev => [...prev, { 
-                        role: 'bot', 
-                        text: '沒問題！請在下方新增任務並進行評分：',
-                        type: 'form_matrix_input'
-                      }]);
-                    }}
-                    className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-2xl text-sm font-bold shadow-lg hover:bg-gray-300 transition-all"
-                  >
-                    不，我要新增
-                  </button>
-                </div>
-              )}
-
-              {m.role === 'bot' && m.type === 'form_matrix_input' && !m.isSubmitted && (
-                <div className="mt-6 space-y-4">
-                  <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-4 bg-gray-50/50 border-b border-gray-100 flex items-center justify-between">
-                      <div className="text-xs font-black text-gray-500 uppercase tracking-wider">任務評分清單</div>
-                      <div className="text-[10px] text-gray-400 font-bold">1-5 分評分</div>
-                    </div>
-                    
-                    <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
-                      <div className="divide-y divide-gray-50">
-                        {matrixForm.tasks.map((task, idx) => (
-                          <div key={idx} className="p-4 flex flex-col gap-3 hover:bg-gray-50/30 transition-colors">
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="text-sm font-bold text-gray-800 leading-tight">{task.title}</div>
-                              <button 
-                                onClick={() => {
-                                  const newTasks = [...matrixForm.tasks];
-                                  newTasks.splice(idx, 1);
-                                  setMatrixForm({ tasks: newTasks });
-                                }}
-                                className="p-1 text-gray-300 hover:text-red-400 transition-colors"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-gray-400 whitespace-nowrap">重要性</span>
-                                <input 
-                                  type="number" 
-                                  min="1" max="5"
-                                  value={task.importance}
-                                  onChange={e => {
-                                    const newTasks = [...matrixForm.tasks];
-                                    newTasks[idx].importance = Math.min(5, Math.max(1, parseInt(e.target.value) || 1));
-                                    setMatrixForm({ tasks: newTasks });
-                                  }}
-                                  className="w-full p-2 text-xs bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-indigo-400/30 text-center font-bold"
-                                />
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-gray-400 whitespace-nowrap">緊急度</span>
-                                <input 
-                                  type="number" 
-                                  min="1" max="5"
-                                  value={task.urgency}
-                                  onChange={e => {
-                                    const newTasks = [...matrixForm.tasks];
-                                    newTasks[idx].urgency = Math.min(5, Math.max(1, parseInt(e.target.value) || 1));
-                                    setMatrixForm({ tasks: newTasks });
-                                  }}
-                                  className="w-full p-2 text-xs bg-gray-100 border-none rounded-xl focus:ring-2 focus:ring-indigo-400/30 text-center font-bold"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-
-                        {/* 新增任務行 - 與上方同級 */}
-                        <div className="p-4 bg-indigo-50/30 border-t border-indigo-100/50 space-y-3">
-                          <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">快速新增任務</div>
-                          <input 
-                            type="text"
-                            id="new-matrix-task-title"
-                            placeholder="輸入任務名稱..."
-                            className="w-full p-3 text-sm bg-white border border-indigo-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-400/30 font-medium"
-                          />
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-indigo-300 whitespace-nowrap">重要性</span>
-                              <input 
-                                type="number" 
-                                id="new-matrix-task-imp"
-                                defaultValue="3"
-                                min="1" max="5"
-                                className="w-full p-2 text-xs bg-white border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-400/30 text-center font-bold"
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-indigo-300 whitespace-nowrap">緊急度</span>
-                              <input 
-                                type="number" 
-                                id="new-matrix-task-urg"
-                                defaultValue="3"
-                                min="1" max="5"
-                                className="w-full p-2 text-xs bg-white border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-400/30 text-center font-bold"
-                              />
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              const titleInput = document.getElementById('new-matrix-task-title') as HTMLInputElement;
-                              const impInput = document.getElementById('new-matrix-task-imp') as HTMLInputElement;
-                              const urgInput = document.getElementById('new-matrix-task-urg') as HTMLInputElement;
-                              
-                              if (titleInput.value.trim()) {
-                                setMatrixForm(prev => ({
-                                  tasks: [...prev.tasks, { 
-                                    title: titleInput.value.trim(), 
-                                    importance: parseInt(impInput.value) || 3, 
-                                    urgency: parseInt(urgInput.value) || 3 
-                                  }]
-                                }));
-                                titleInput.value = '';
-                                impInput.value = '3';
-                                urgInput.value = '3';
-                              }
-                            }}
-                            className="w-full py-2.5 bg-white border-2 border-dashed border-indigo-200 text-indigo-500 rounded-2xl text-xs font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
-                          >
-                            <Plus size={14} />
-                            新增至清單
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button 
-                    onClick={() => handleFormSubmit('matrix')}
-                    disabled={matrixForm.tasks.length === 0}
-                    className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-base font-black shadow-xl hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:bg-gray-300 disabled:shadow-none"
-                  >
-                    <CheckCircle2 size={20} />
-                    產生分析矩陣
-                  </button>
-                </div>
-              )}
-              
-              {m.role === 'bot' && m.type === 'form_schedule' && !m.isSubmitted && (
-                <div className="mt-6 space-y-4">
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">1. 平日或假日起床時間</div>
-                    <input 
-                      type="text" 
-                      placeholder="請輸入時間..."
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
-                      value={scheduleForm.wakeTime}
-                      onChange={e => setScheduleForm({...scheduleForm, wakeTime: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">2. 睡眠需求時長</div>
-                    <input 
-                      type="text" 
-                      placeholder="請輸入時長..."
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
-                      value={scheduleForm.sleepDuration}
-                      onChange={e => setScheduleForm({...scheduleForm, sleepDuration: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">3. 日常通勤時間時長</div>
-                    <input 
-                      type="text" 
-                      placeholder="請輸入時長..."
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all"
-                      value={scheduleForm.commuteTime}
-                      onChange={e => setScheduleForm({...scheduleForm, commuteTime: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">4. 你想完成的事</div>
-                    <textarea 
-                      placeholder="請輸入內容..."
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400/30 transition-all min-h-[80px] resize-none"
-                      value={scheduleForm.goals}
-                      onChange={e => setScheduleForm({...scheduleForm, goals: e.target.value})}
-                    />
-                  </div>
-                  <button 
-                    onClick={() => handleFormSubmit('schedule')}
-                    className="w-full py-3 bg-blue-500 text-white rounded-2xl text-sm font-bold shadow-lg hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
-                  >
-                    <CheckCircle2 size={16} />
-                    確認送出
-                  </button>
-                </div>
-              )}
-
-              {m.role === 'bot' && m.type === 'form_task' && !m.isSubmitted && (
-                <div className="mt-6 space-y-4">
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">你想拆解的任務是什麼呢？</div>
-                    <input 
-                      type="text" 
-                      placeholder="請輸入任務..."
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
-                      value={taskForm.taskName}
-                      onChange={e => setTaskForm({...taskForm, taskName: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">它最終要以何種形式呈現呢？</div>
-                    <input 
-                      type="text" 
-                      placeholder="例如：報告、筆記"
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
-                      value={taskForm.format}
-                      onChange={e => setTaskForm({...taskForm, format: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">開始執行時間</div>
-                    <input 
-                      type="text" 
-                      placeholder="例如：2026/03/15"
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
-                      value={taskForm.startTime}
-                      onChange={e => setTaskForm({...taskForm, startTime: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-xs text-gray-500 font-bold ml-1">結束執行時間</div>
-                    <input 
-                      type="text" 
-                      placeholder="例如：2026/03/20"
-                      className="w-full p-3 text-sm bg-white border-none rounded-2xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-400/30 transition-all"
-                      value={taskForm.endTime}
-                      onChange={e => setTaskForm({...taskForm, endTime: e.target.value})}
-                    />
-                  </div>
-                  <button 
-                    onClick={() => handleFormSubmit('task')}
-                    className="w-full py-3 bg-purple-500 text-white rounded-2xl text-sm font-bold shadow-lg hover:bg-purple-600 active:scale-95 transition-all flex items-center justify-center gap-2 mt-2"
-                  >
-                    <CheckCircle2 size={16} />
-                    確認送出
-                  </button>
-                </div>
-              )}
-            </div>
+        <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar">
+          <div className="px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-between">
+            <span>最近的歷史紀錄</span>
+            <RotateCcw size={10} className="opacity-50" />
           </div>
-        ))}
-        {isTyping && (
-           <div className="flex justify-start">
-             <div className="bg-gray-100 p-3 rounded-2xl rounded-tl-none animate-pulse text-gray-400 text-[10px] flex items-center gap-2 font-bold">
-               <Sparkles size={10} className="animate-spin duration-[3000ms]" />
-               AI 正在思考中...
-             </div>
-           </div>
-        )}
-      </div>
-
-      {/* 底部輸入區域 - 改為 Flex 佈局的一部分，確保在最下方 */}
-      <div className="p-4 bg-white border-t border-gray-50">
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide no-scrollbar">
-            {['分析日常行程', '拆解學習任務', '任務重要性排序'].map((s, idx) => (
+          
+          {conversations.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-xs text-gray-400 font-medium italic">目前沒有對話紀錄</p>
+            </div>
+          ) : (
+            conversations.map(conv => (
+              <div 
+                key={conv.id}
+                onClick={() => {
+                  setCurrentConvId(conv.id);
+                  setIsSidebarOpen(false);
+                }}
+                className={`group flex items-center justify-between p-3.5 rounded-xl cursor-pointer transition-all ${currentConvId === conv.id ? 'bg-[#E8F0FE] text-[#1967D2]' : 'text-gray-600 hover:bg-gray-200'}`}
+              >
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <Sparkles size={14} className={currentConvId === conv.id ? 'text-blue-500' : 'text-gray-400'} />
+                  <span className="text-xs font-bold truncate pr-2">{conv.title}</span>
+                </div>
                 <button 
-                  key={idx}
-                  onClick={() => handleSuggestionClick(s)}
-                  className="whitespace-nowrap bg-gray-50 border border-gray-100 px-3 py-1.5 rounded-full text-[10px] font-bold text-gray-500 hover:border-indigo-300 hover:text-indigo-500 transition-all active:scale-95"
+                  onClick={(e) => handleDeleteChat(conv.id, e)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
                 >
-                    {s}
+                  <X size={12} />
                 </button>
-            ))}
+              </div>
+            ))
+          )}
         </div>
 
-        <div className="flex items-center gap-2 relative">
-          {/* Enter 提示氣泡 */}
-          {showEnterHint && (
-            <div className="absolute -top-12 right-0 bg-gray-800 text-white text-[10px] px-3 py-1.5 rounded-xl shadow-xl animate-bounce pointer-events-none z-[60]">
-              再按一次 Enter 發送
-              <div className="absolute -bottom-1 right-5 w-2 h-2 bg-gray-800 rotate-45"></div>
+        <div className="p-4 border-t border-gray-200 bg-gray-50/50">
+           <button 
+             onClick={() => navigateTo(AppRoute.SETTINGS)}
+             className="w-full flex items-center gap-3 p-3 text-gray-600 hover:bg-gray-200 rounded-xl transition-all active:scale-95"
+           >
+             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-xs">U</div>
+             <div className="flex-1 text-left">
+               <div className="text-xs font-bold">設定相關</div>
+               <div className="text-[10px] text-gray-400">偏好設定與帳號</div>
+             </div>
+           </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white relative">
+        <header className="px-4 h-16 flex items-center justify-between border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2.5 text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
+              title={isSidebarOpen ? "收起側欄" : "展開側欄"}
+            >
+              <Maximize2 size={20} className={isSidebarOpen ? "rotate-45" : ""} />
+            </button>
+            <div className="flex items-center gap-2">
+                <Sparkles className="text-blue-500" size={18} />
+                <h1 className="text-sm font-bold text-gray-800 tracking-tight truncate max-w-[150px]">
+                  {currentConversation?.title || 'FOCUS AI'}
+                </h1>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={handleNewChat}
+              className="p-2.5 text-gray-400 hover:text-blue-500 transition-colors hidden md:flex"
+              title="新對話"
+            >
+              <Plus size={20} />
+            </button>
+            <button 
+              onClick={() => navigateTo(AppRoute.HOME)}
+              className="p-2.5 text-gray-600 hover:bg-gray-100 rounded-xl transition-all active:scale-90"
+              title="返回首頁"
+            >
+              <Home size={20} />
+            </button>
+          </div>
+        </header>
+
+        {/* Chat Messages */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-8 md:px-12 space-y-10 scroll-smooth">
+          {(!currentConvId || messages.length === 0) ? (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto text-center space-y-10 animate-in fade-in zoom-in-95 duration-1000">
+              <div className="relative">
+                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-blue-200 rotate-6 animate-pulse">
+                  <Sparkles className="text-white" size={40} />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-white rounded-2xl shadow-lg flex items-center justify-center">
+                  <Zap size={20} className="text-yellow-500" fill="currentColor" />
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <h2 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter">我是 FOCUS AI</h2>
+                <p className="text-gray-500 text-base font-medium leading-relaxed max-w-md mx-auto">
+                  我可以協助你拆解學習任務、安排每日行程，<br className="hidden md:block" />
+                  或是為你目前的待辦事項進行優先級排序。
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full mt-6">
+                {[
+                  { title: '分析日常行程', desc: '為你的每一天找到最佳節奏', color: 'blue' },
+                  { title: '拆解學習任務', desc: '將大目標化為可執行的小步', color: 'indigo' },
+                  { title: '任務重要性排序', desc: '使用艾森豪矩陣進行數位化分析', color: 'purple' },
+                  { title: '制定讀書計畫', desc: '幫你規劃考前或專題的時程表', color: 'pink' }
+                ].map((s, idx) => (
+                  <button 
+                    key={idx}
+                    onClick={() => handleSuggestionClick(s.title)}
+                    className="p-5 bg-white border border-gray-100 rounded-3xl text-left hover:border-blue-300 hover:shadow-xl hover:shadow-blue-50/50 transition-all group relative overflow-hidden active:scale-95"
+                  >
+                    <div className="relative z-10 flex flex-col gap-1.5">
+                      <div className="text-sm font-black text-gray-800 flex items-center gap-2">
+                        <div className={`w-1.5 h-1.5 rounded-full bg-${s.color}-500`}></div>
+                        {s.title}
+                      </div>
+                      <div className="text-[10px] text-gray-400 font-bold">{s.desc}</div>
+                    </div>
+                    <div className="absolute -right-4 -bottom-4 opacity-0 group-hover:opacity-10 transition-opacity">
+                      <Sparkles size={80} className="text-gray-900" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto w-full space-y-10 pb-20">
+              {messages.map((m, i) => (
+                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-500`}>
+                  <div className={`flex gap-4 max-w-[90%] md:max-w-[80%] ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    <div className={`w-8 h-8 rounded-xl flex-shrink-0 flex items-center justify-center shadow-sm ${m.role === 'user' ? 'bg-gray-900 text-white' : 'bg-blue-500 text-white'}`}>
+                      {m.role === 'user' ? 'U' : <Sparkles size={14} />}
+                    </div>
+                    <div className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'} gap-1.5`}>
+                      <div className={`px-5 py-4 rounded-[2rem] text-sm md:text-base font-medium leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-gray-100 text-gray-800 rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'}`}>
+                        {m.text}
+                        {m.role === 'bot' && m.matrixData && <MatrixChart data={m.matrixData} />}
+                        
+                        {m.role === 'bot' && m.type === 'form_matrix_confirm' && !m.isSubmitted && (
+                          <div className="mt-6 flex gap-3">
+                             <button onClick={() => handleSend('是的，只有這些。')} className="flex-1 py-3 bg-blue-500 text-white rounded-2xl text-xs font-bold shadow-lg">是的</button>
+                             <button onClick={() => handleSend('不，我還有其他任務。')} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">要新增</button>
+                          </div>
+                        )}
+
+                        {m.role === 'bot' && m.type === 'form_matrix_input' && !m.isSubmitted && (
+                          <div className="mt-6 space-y-4">
+                            {/* Matrix Input Form components as seen in the original code but rendered within the message bubble */}
+                            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden text-xs">
+                               {matrixForm.tasks.map((task, idx) => (
+                                 <div key={idx} className="p-3 border-b border-gray-50 flex items-center justify-between">
+                                   <span className="font-bold truncate max-w-[100px]">{task.title}</span>
+                                   <div className="flex gap-2">
+                                     <input type="number" min="1" max="5" value={task.importance} onChange={e => {
+                                       const newTasks = [...matrixForm.tasks];
+                                       newTasks[idx].importance = parseInt(e.target.value) || 1;
+                                       setMatrixForm({ tasks: newTasks });
+                                     }} className="w-8 p-1 text-center bg-gray-50 rounded" />
+                                     <input type="number" min="1" max="5" value={task.urgency} onChange={e => {
+                                       const newTasks = [...matrixForm.tasks];
+                                       newTasks[idx].urgency = parseInt(e.target.value) || 1;
+                                       setMatrixForm({ tasks: newTasks });
+                                     }} className="w-8 p-1 text-center bg-gray-50 rounded" />
+                                   </div>
+                                 </div>
+                               ))}
+                            </div>
+                            <button onClick={() => handleFormSubmit('matrix')} className="w-full py-3 bg-blue-600 text-white rounded-2xl text-xs font-black">產生分析矩陣</button>
+                          </div>
+                        )}
+
+                        {m.role === 'bot' && m.type === 'form_schedule' && !m.isSubmitted && (
+                          <div className="mt-6 space-y-3">
+                            <input type="text" placeholder="起床時間" className="w-full p-3 bg-gray-50 rounded-xl text-sm border-none shadow-inner" value={scheduleForm.wakeTime} onChange={e => setScheduleForm({...scheduleForm, wakeTime: e.target.value})} />
+                            <textarea placeholder="你想完成的事" className="w-full p-3 bg-gray-50 rounded-xl text-sm border-none shadow-inner min-h-[60px]" value={scheduleForm.goals} onChange={e => setScheduleForm({...scheduleForm, goals: e.target.value})} />
+                            <button onClick={() => handleFormSubmit('schedule')} className="w-full py-3 bg-blue-500 text-white rounded-2xl text-sm font-black">建議行程</button>
+                          </div>
+                        )}
+
+                        {m.role === 'bot' && m.type === 'form_task' && !m.isSubmitted && (
+                          <div className="mt-6 space-y-3">
+                            <input type="text" placeholder="任務名稱" className="w-full p-3 bg-gray-50 rounded-xl text-sm border-none shadow-inner" value={taskForm.taskName} onChange={e => setTaskForm({...taskForm, taskName: e.target.value})} />
+                            <button onClick={() => handleFormSubmit('task')} className="w-full py-3 bg-indigo-500 text-white rounded-2xl text-sm font-black">拆解步驟</button>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-gray-300 font-bold px-1 uppercase tracking-widest leading-none mt-1">
+                        {m.role === 'user' ? '已發送' : 'Focus AI 助理'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {isTyping && (
+                <div className="flex justify-start animate-pulse">
+                  <div className="flex gap-4 max-w-[80%] items-start">
+                    <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
+                      <Sparkles size={14} className="animate-spin duration-[3000ms]" />
+                    </div>
+                    <div className="bg-gray-50 px-5 py-3 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
+                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
+                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-150"></span>
+                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-300"></span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
+        </div>
 
-          <button 
-            onClick={() => navigateTo(AppRoute.HOME)}
-            className="w-12 h-12 flex-shrink-0 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 hover:text-indigo-500 transition-all active:scale-90 border border-gray-100"
-          >
-            <Home size={20} />
-          </button>
-
-          <div className="flex-1 relative h-12">
-            <div className="absolute inset-y-0 left-4 flex items-center text-gray-400">
-              <Search size={18} />
+        {/* Floating Input Area */}
+        <div className="pb-8 pt-4 px-4 bg-gradient-to-t from-white via-white to-transparent sticky bottom-0 z-50">
+          <div className="max-w-3xl mx-auto w-full relative">
+            <AnimatePresence>
+              {showEnterHint && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                  className="absolute -top-12 right-0 bg-gray-900 border border-gray-800 text-white text-[10px] font-bold px-4 py-2 rounded-2xl shadow-2xl z-[60]"
+                >
+                  再按一次 Enter 發送訊息
+                  <div className="absolute -bottom-1 right-6 w-2.5 h-2.5 bg-gray-900 rotate-45 border-r border-b border-gray-800"></div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <div className="relative group bg-white border-2 border-gray-100 focus-within:border-blue-200 rounded-[2rem] shadow-2xl shadow-gray-200/50 transition-all overflow-hidden flex items-end">
+              <div className="flex-1 min-h-[64px] flex items-center">
+                <textarea 
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="詢問任何問題..." 
+                  className="w-full bg-transparent py-5 pl-8 pr-16 text-sm md:text-base font-medium text-gray-800 focus:outline-none transition-all resize-none max-h-[200px]"
+                  style={{ height: 'auto' }}
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = `${target.scrollHeight}px`;
+                  }}
+                />
+              </div>
+              <div className="p-2.5">
+                <button 
+                   onClick={() => handleSend()} 
+                   disabled={!input.trim()}
+                   className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${input.trim() ? 'bg-blue-600 text-white shadow-lg active:scale-90 scale-100 translate-y-0' : 'bg-gray-100 text-gray-300 scale-95 translate-y-1'}`}
+                 >
+                    <Send size={20} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+                 </button>
+              </div>
             </div>
-            <input 
-              type="text" 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="詢問 FOCUS AI..." 
-              className="w-full h-full bg-gray-50 border border-gray-100 rounded-full pl-10 pr-12 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            />
-            <div className="absolute inset-y-0 right-2 flex items-center">
-               <button 
-                 onClick={() => handleSend()} 
-                 className="bg-indigo-500 w-8 h-8 rounded-full text-white shadow-md flex items-center justify-center hover:bg-indigo-600 transition-all transform active:scale-95"
-               >
-                  <Send size={14} className="ml-0.5" />
-               </button>
+            
+            <div className="mt-4 flex items-center justify-center gap-6">
+               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest px-2 py-1 bg-gray-50 rounded-lg">Focus AI v3.0 Premium</p>
+               <div className="h-1 w-1 bg-gray-200 rounded-full"></div>
+                <p className="text-[10px] text-gray-400 font-medium">模型：Gemini 2.0 Flash</p>
             </div>
           </div>
         </div>

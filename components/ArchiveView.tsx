@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, ListChecks } from 'lucide-react';
+import ViewHeader from './ViewHeader';
+import { ListChecks, ChevronLeft } from 'lucide-react';
 
 interface ArchiveViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -10,15 +10,7 @@ interface ArchiveViewProps {
 const ArchiveView: React.FC<ArchiveViewProps> = ({ navigateTo }) => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white p-6 flex items-center gap-4 shadow-sm">
-        <button 
-          onClick={() => navigateTo(AppRoute.PROFILE)}
-          className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <h1 className="text-xl font-bold">封存</h1>
-      </div>
+      <ViewHeader title="封存" onBack={() => navigateTo(AppRoute.PROFILE)} />
 
       <div className="p-6">
         <div className="space-y-3">

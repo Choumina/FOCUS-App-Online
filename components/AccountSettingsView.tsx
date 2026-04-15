@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, User, Mail, Phone, Calendar, Sparkles } from 'lucide-react';
+import ViewHeader from './ViewHeader';
+import { User, Mail, Calendar, Sparkles } from 'lucide-react';
 
 interface AccountSettingsViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -19,15 +19,7 @@ interface AccountSettingsViewProps {
 const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({ navigateTo, onDeleteAccount, userProfile, authProvider }) => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white p-6 flex items-center gap-4 shadow-sm">
-        <button 
-          onClick={() => navigateTo(AppRoute.PROFILE)}
-          className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <h1 className="text-xl font-bold">帳號設定</h1>
-      </div>
+      <ViewHeader title="帳號設定" onBack={() => navigateTo(AppRoute.PROFILE)} />
 
       <div className="p-6 space-y-4">
         <div className="bg-white rounded-3xl p-6 shadow-sm space-y-6">

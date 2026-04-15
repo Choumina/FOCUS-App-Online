@@ -1,7 +1,8 @@
-
 import React from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, User, Mail, Shield, Bell, LogOut, Archive } from 'lucide-react';
+import ViewHeader from './ViewHeader';
+import { User, Mail, Shield, Bell, LogOut, Archive, ChevronLeft, Pencil } from 'lucide-react';
+import { UserIdentity } from '../types';
 
 interface ProfileViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -11,22 +12,14 @@ interface ProfileViewProps {
     bio: string;
     avatar: string;
     level: number;
+    identity?: UserIdentity;
   };
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ navigateTo, onLogout, userProfile }) => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <div className="bg-white p-6 flex items-center gap-4 shadow-sm">
-        <button 
-          onClick={() => navigateTo(AppRoute.HOME)}
-          className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <h1 className="text-xl font-bold">個人檔案</h1>
-      </div>
+      <ViewHeader title="個人檔案" onBack={() => navigateTo(AppRoute.HOME)} />
 
       {/* Profile Info */}
       <div className="p-6">
@@ -37,14 +30,35 @@ const ProfileView: React.FC<ProfileViewProps> = ({ navigateTo, onLogout, userPro
           <h2 className="text-2xl font-bold text-gray-800">{userProfile.name}</h2>
           <p className="text-gray-400 font-medium text-center px-4 mt-1">{userProfile.bio}</p>
           
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex gap-3 flex-wrap justify-center">
             <div className="bg-blue-50 px-4 py-2 rounded-2xl">
               <span className="text-blue-600 font-bold text-sm">Lv. {userProfile.level}</span>
             </div>
             <div className="bg-orange-50 px-4 py-2 rounded-2xl">
               <span className="text-orange-600 font-bold text-sm">Rank #1</span>
             </div>
+            {userProfile.identity && (
+              <div className={`px-4 py-2 rounded-2xl ${
+                userProfile.identity === 'high_school' ? 'bg-blue-100' :
+                userProfile.identity === 'university' ? 'bg-purple-100' : 'bg-green-100'
+              }`}>
+                <span className={`font-bold text-sm ${
+                  userProfile.identity === 'high_school' ? 'text-blue-700' :
+                  userProfile.identity === 'university' ? 'text-purple-700' : 'text-green-700'
+                }`}>
+                  {userProfile.identity === 'high_school' ? '🏫 高中職' :
+                   userProfile.identity === 'university' ? '🎓 大學生' : '✨ 其他'}
+                </span>
+              </div>
+            )}
           </div>
+
+          <button
+            onClick={() => navigateTo(AppRoute.PROFILE_EDIT)}
+            className="mt-4 flex items-center gap-1.5 text-sm text-blue-500 font-bold px-4 py-2 rounded-2xl bg-blue-50 hover:bg-blue-100 transition-colors"
+          >
+            <Pencil size={14} />編輯個人檔案
+          </button>
         </div>
 
         {/* Menu Items */}

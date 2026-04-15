@@ -1,9 +1,16 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+if (!apiKey) {
+  console.warn("⚠️ VITE_GEMINI_API_KEY is missing in your .env file!");
+}
+
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const generateTaskBreakdown = async (mainTask: string) => {
+  if (!ai) return null;
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -31,6 +38,7 @@ export const generateTaskBreakdown = async (mainTask: string) => {
 };
 
 export const chatWithAssistant = async (message: string, history: {role: 'user' | 'bot', text: string}[]) => {
+  if (!ai) return { text: "AI 助手目前尚未配置 API Key，請檢查環境變數設定。" };
   try {
     const now = new Date();
     const dateStr = now.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
@@ -46,19 +54,20 @@ export const chatWithAssistant = async (message: string, history: {role: 'user' 
       model: 'gemini-3-flash-preview',
       contents: contents,
       config: {
-        systemInstruction: `你是 FOCUS AI，一個友善的學術陪伴助手。
+        systemInstruction: `你是 FOCUS AI，一個極度專業且友善的學術與生活平衡助手。
 現在時間是：${dateStr} ${timeStr}。
 請務必使用『繁體中文』回覆。
-關鍵指令：『嚴禁使用任何 Markdown 語法』，包括但不限於加粗符號（**）、標題符號（###）、斜體符號（*）或列表符號（- 或 *）。
-請僅使用一般的文字、數字與自然換行來組織回覆。
+關鍵指令：『嚴禁使用任何 Markdown 語法』，包括但不限於加粗（**）、標題（###）、條列（- 或 *）。
+請僅使用純文字與換行來組織對話內容。
 
-你的任務：
-1. 協助使用者分析日常行程或拆解學習任務。
-2. 協助使用者進行「任務重要性排序」。根據使用者提供的任務及其重要性（1-5）與緊急度（1-5）評分，在回覆的 matrixData 欄位中提供結構化資料。
-3. 根據使用者的習慣、目前的日期時間，提供具體的建議。
-4. 如果你在對話中為使用者安排了行程，請同時在回覆的 events 欄位中提供這些行程的結構化資料。
-5. events 中的 date 必須符合格式 YYYY-MM-DD（例如：${dateStr}）。
-6. startTime 與 endTime 必須符合格式 HH:mm。`,
+你的核心任務：
+1. 目標具體化：將使用者提供的大目標拆解為具體、可執行的子任務。
+2. 日常時間分析：分析使用者的起床、睡覺、通勤與現有行程，找出空檔並將目標排入合理、不擁擠的時間段內。
+3. 任務重要度排序（艾森豪矩陣）：根據任務的「重要性」與「緊急度」進行數位評分（1-5），減少使用者猶豫時間。
+4. 自動化建議：
+   - 如果你在對話中安排了行程，請在 events 欄位提供資料。
+   - date 格式必須為 YYYY-MM-DD，startTime 與 endTime 必須符合 HH:mm（例如 09:30, 14:00）。
+   - 如果涉及到任務分析，請在 matrixData 中提供權重分析。`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -70,9 +79,9 @@ export const chatWithAssistant = async (message: string, history: {role: 'user' 
                 type: Type.OBJECT,
                 properties: {
                   title: { type: Type.STRING, description: "行程標題" },
-                  startTime: { type: Type.STRING, description: "開始時間，格式為 HH:mm" },
-                  endTime: { type: Type.STRING, description: "結束時間，格式為 HH:mm" },
-                  date: { type: Type.STRING, description: "日期，格式為 YYYY-MM-DD" }
+                  startTime: { type: Type.STRING, description: "開始時間 (HH:mm)" },
+                  endTime: { type: Type.STRING, description: "結束時間 (HH:mm)" },
+                  date: { type: Type.STRING, description: "日期 (YYYY-MM-DD)" }
                 },
                 required: ["title", "startTime", "endTime", "date"]
               }

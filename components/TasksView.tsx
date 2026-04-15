@@ -1,7 +1,10 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { AppRoute, Task } from '../types';
-import { ChevronLeft, Plus, CheckCircle2, Circle, Send, Trash2 } from 'lucide-react';
+import ConfirmationModal from './ConfirmationModal';
+import { CheckCircle2, Circle, Trash2, Sparkles, Loader2, X } from 'lucide-react';
+import { generateTaskBreakdown } from '../geminiService';
+import ViewHeader from './ViewHeader';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface TasksViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -23,123 +26,157 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [localIsAdding, setLocalIsAdding] = useState(false);
   const [localNewTitle, setLocalNewTitle] = useState('');
   const [confirmTask, setConfirmTask] = useState<Task | null>(null);
-
+  const [isBreakingDown, setIsBreakingDown] = useState<string | null>(null);
+  const [breakdownResults, setBreakdownResults] = useState<{taskId: string, subtasks: any[]}>({ taskId: '', subtasks: [] });
+  
   const isAdding = isAddingProp !== undefined ? isAddingProp : localIsAdding;
   const setIsAdding = setIsAddingProp !== undefined ? setIsAddingProp : setLocalIsAdding;
   const newTitle = newTitleProp !== undefined ? newTitleProp : localNewTitle;
   const setNewTitle = setNewTitleProp !== undefined ? setNewTitleProp : setLocalNewTitle;
-
+  
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 當開啟新增模式時，自動聚焦輸入框
   useEffect(() => {
     if (isAdding && inputRef.current) {
       inputRef.current.focus();
     }
   }, [isAdding]);
 
-  const handleAddTask = () => {
+  const addTask = () => {
     if (newTitle.trim()) {
       const newTask: Task = {
         id: Date.now().toString(),
         title: newTitle.trim(),
-        dueDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }),
+        dueDate: new Date().toISOString().split('T')[0],
         completed: false
       };
-      setTasks(prev => {
-        const newTasks = [...prev, newTask];
-        return newTasks.sort((a, b) => {
-          if (a.completed === b.completed) {
-            return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-          }
-          return a.completed ? 1 : -1;
-        });
-      });
+      setTasks([...tasks, newTask]);
       setNewTitle('');
-      setIsAdding(false);
-    } else {
       setIsAdding(false);
     }
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleAddTask();
-    } else if (e.key === 'Escape') {
-      setIsAdding(false);
-      setNewTitle('');
+    if (e.key === 'Enter') addTask();
+    if (e.key === 'Escape') setIsAdding(false);
+  };
+
+  const handleToggle = (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (task && !task.completed) {
+      setConfirmTask(task);
+    } else {
+      toggleTask(id);
     }
   };
 
+  const handleAINestedBreakdown = async (task: Task) => {
+    if (isBreakingDown === task.id) {
+      setIsBreakingDown(null);
+      return;
+    }
+    
+    setIsBreakingDown(task.id);
+    const results = await generateTaskBreakdown(task.title);
+    if (results) {
+      setBreakdownResults({ taskId: task.id, subtasks: results });
+    } else {
+      setBreakdownResults({ taskId: task.id, subtasks: [] });
+    }
+  };
+
+  const addSubtaskAsMain = (title: string) => {
+    const newTask: Task = {
+      id: Date.now().toString(),
+      title: title,
+      dueDate: new Date().toISOString().split('T')[0],
+      completed: false
+    };
+    setTasks(prev => [...prev, newTask]);
+  };
+
   return (
-    <div className="p-6 min-h-screen bg-white flex flex-col relative overflow-hidden">
-      <div className="flex items-center justify-between mb-8">
-        <button onClick={() => navigateTo(AppRoute.HOME)} className="bg-gray-100 p-3 rounded-2xl hover:bg-gray-200 transition-colors">
-          <ChevronLeft size={24} />
-        </button>
-        <div className="bg-gray-100 rounded-full flex p-1 flex-1 mx-4">
-          <button className="flex-1 py-2 text-sm font-bold bg-white shadow-sm rounded-full">
-            Reminders
-          </button>
-          <button 
-            onClick={() => navigateTo(AppRoute.FOCUS_TIMER)}
-            className="flex-1 py-2 text-sm font-bold text-gray-400"
-          >
-            番茄鐘
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <ViewHeader 
+        title="Reminders" 
+        onBack={() => navigateTo(AppRoute.HOME)}
+      />
 
-      <h1 className="text-4xl font-extrabold text-blue-500 mb-8">Reminders</h1>
+      <div className="p-6 space-y-6">
+        {tasks.length === 0 && !isAdding && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+            <CheckCircle2 size={48} className="mb-4 opacity-20" />
+            <p className="font-bold">目前沒有待辦事項</p>
+          </div>
+        )}
 
-      <div className="flex-1 space-y-6 overflow-y-auto pb-48">
+        {/* 任務清單 */}
         {tasks.map(task => (
-          <div key={task.id} className="flex items-start gap-4 group">
-            <div className="mt-1 cursor-pointer" onClick={() => {
-              if (!task.completed) {
-                setConfirmTask(task);
-              } else {
-                toggleTask(task.id);
-              }
-            }}>
-              {task.completed ? (
-                <CheckCircle2 size={24} className="text-blue-500" />
-              ) : (
-                <Circle size={24} className="text-gray-300 group-hover:text-blue-400" />
-              )}
-            </div>
+          <div key={task.id} className="group relative flex items-start gap-4 bg-white p-5 rounded-[2rem] shadow-sm border border-gray-100 transition-all hover:shadow-md">
+            <button 
+              onClick={() => handleToggle(task.id)}
+              className={`mt-1 transition-colors ${task.completed ? 'text-blue-500' : 'text-gray-300 hover:text-blue-400'}`}
+            >
+              {task.completed ? <CheckCircle2 size={24} /> : <Circle size={24} />}
+            </button>
             <div className="flex-1">
-              <input
-                type="text"
-                value={task.title}
-                onChange={(e) => {
-                  const newTitle = e.target.value;
-                  setTasks(prev => prev.map(t => t.id === task.id ? { ...t, title: newTitle } : t));
-                }}
-                onBlur={(e) => {
-                  if (!e.target.value.trim()) {
-                    setTasks(prev => prev.filter(t => t.id !== task.id));
-                  }
-                }}
-                className={`w-full text-lg font-bold bg-transparent focus:outline-none focus:border-b-2 focus:border-blue-200 ${task.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}
-              />
-              <input
-                type="date"
-                value={task.dueDate.replace(/\//g, '-')}
-                onChange={(e) => {
-                  const newDate = e.target.value.replace(/-/g, '/');
-                  setTasks(prev => {
-                    const updatedTasks = prev.map(t => t.id === task.id ? { ...t, dueDate: newDate } : t);
-                    return updatedTasks.sort((a, b) => {
-                      if (a.completed === b.completed) {
-                        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-                      }
-                      return a.completed ? 1 : -1;
-                    });
-                  });
-                }}
-                className="text-xs text-gray-400 font-medium bg-transparent focus:outline-none focus:text-blue-500 cursor-pointer mt-1"
-              />
+              <h3 className={`font-bold transition-all ${task.completed ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                {task.title}
+              </h3>
+              
+              <div className="flex items-center gap-3 mt-1.5">
+                {!task.completed && (
+                  <button 
+                    onClick={() => handleAINestedBreakdown(task)}
+                    className="flex items-center gap-1.5 text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full hover:bg-indigo-100 transition-colors"
+                  >
+                    {isBreakingDown === task.id ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                    AI 拆解
+                  </button>
+                )}
+                <span className="text-[10px] text-gray-400 font-medium">截止日期: {task.dueDate}</span>
+              </div>
+
+              {/* AI 拆解結果面板 */}
+              <AnimatePresence>
+                {isBreakingDown === task.id && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden mt-4 space-y-3 bg-gray-50/50 p-4 rounded-2xl border border-indigo-50"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-indigo-400 px-1">
+                       <div className="flex items-center gap-1">
+                        <Sparkles size={10} /> AI 建議的步驟
+                       </div>
+                       <button onClick={() => setIsBreakingDown(null)}><X size={14} /></button>
+                    </div>
+                    {breakdownResults.taskId === task.id && breakdownResults.subtasks?.length > 0 ? (
+                      breakdownResults.subtasks.map((sub, idx) => (
+                        <div key={idx} className="flex items-center justify-between gap-2 group/sub">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-gray-700">{sub.title}</span>
+                            {sub.description && <span className="text-[10px] text-gray-400">{sub.description}</span>}
+                          </div>
+                          <button 
+                            onClick={() => addSubtaskAsMain(sub.title)}
+                            className="opacity-0 group-hover/sub:opacity-100 p-1.5 bg-white text-indigo-500 rounded-xl shadow-sm text-[10px] font-bold transition-all hover:scale-105 active:scale-95"
+                          >
+                            加入清單
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-[10px] text-gray-400 italic py-2 flex items-center gap-2">
+                        {isBreakingDown === task.id && !breakdownResults.subtasks.length ? (
+                          <><Loader2 size={10} className="animate-spin" /> 分析中...</>
+                        ) : "無建議步驟"}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             <button 
               onClick={() => setTasks(prev => prev.filter(t => t.id !== task.id))}
@@ -173,37 +210,20 @@ const TasksView: React.FC<TasksViewProps> = ({
         )}
       </div>
 
-      {/* 確認完成彈窗 */}
-      {confirmTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-[2.5rem] p-8 w-full max-w-xs shadow-2xl animate-in zoom-in duration-300">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 size={32} className="text-blue-500" />
-            </div>
-            <h3 className="text-xl font-bold text-center text-gray-800 mb-2">確認完成任務？</h3>
-            <p className="text-gray-500 text-center text-sm mb-8">
-              「{confirmTask.title}」完成後將會被移至封存區，並獲得 50 金幣獎勵。
-            </p>
-            <div className="flex flex-col gap-3">
-              <button 
-                onClick={() => {
-                  archiveTask(confirmTask.id);
-                  setConfirmTask(null);
-                }}
-                className="w-full py-4 bg-blue-500 text-white rounded-2xl font-bold shadow-lg shadow-blue-100 active:scale-95 transition-all"
-              >
-                確定完成
-              </button>
-              <button 
-                onClick={() => setConfirmTask(null)}
-                className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-bold active:scale-95 transition-all"
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={!!confirmTask}
+        onClose={() => setConfirmTask(null)}
+        onConfirm={() => {
+          if (confirmTask) {
+            archiveTask(confirmTask.id);
+            setConfirmTask(null);
+          }
+        }}
+        title="確認完成任務？"
+        message={`「${confirmTask?.title}」完成後將會被移至封存區，並獲得 50 金幣獎勵。`}
+        confirmText="確定完成"
+        cancelText="取消"
+      />
     </div>
   );
 };

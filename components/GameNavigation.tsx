@@ -18,6 +18,7 @@ const GameNavigation: React.FC<GameNavigationProps> = ({ currentRoute, navigateT
           寵物專區
         </button>
         <button 
+          id="game-race-btn"
           onClick={() => navigateTo(AppRoute.GAME_RACE)}
           className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${currentRoute === AppRoute.GAME_RACE ? 'bg-blue-500 text-white shadow-md' : 'text-gray-500 hover:text-gray-700'}`}
         >

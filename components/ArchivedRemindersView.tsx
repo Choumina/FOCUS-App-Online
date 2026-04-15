@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { AppRoute, Task } from '../types';
-import { ChevronLeft, CheckCircle2, Calendar } from 'lucide-react';
+import ViewHeader from './ViewHeader';
+import { CheckCircle2, Calendar } from 'lucide-react';
 
 interface ArchivedRemindersViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -11,15 +11,7 @@ interface ArchivedRemindersViewProps {
 const ArchivedRemindersView: React.FC<ArchivedRemindersViewProps> = ({ navigateTo, archivedTasks }) => {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white p-6 flex items-center gap-4 shadow-sm">
-        <button 
-          onClick={() => navigateTo(AppRoute.PROFILE_ARCHIVE)}
-          className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
-        >
-          <ChevronLeft size={24} />
-        </button>
-        <h1 className="text-xl font-bold">Reminders 封存區</h1>
-      </div>
+      <ViewHeader title="Reminders 封存區" onBack={() => navigateTo(AppRoute.PROFILE_ARCHIVE)} />
 
       <div className="p-6">
         {archivedTasks.length === 0 ? (

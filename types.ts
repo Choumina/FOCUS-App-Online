@@ -1,9 +1,22 @@
+export type UserIdentity = 'high_school' | 'university' | 'other';
 
 export interface Task {
   id: string;
   title: string;
   dueDate: string;
   completed: boolean;
+  importance?: number; // 1-5
+  urgency?: number;    // 1-5
+}
+
+export interface FocusLog {
+  id: string;
+  startTime: string;
+  endTime: string;
+  duration: number; // minutes
+  taskId?: string;
+  taskTitle?: string;
+  interruptionCount: number;
 }
 
 export interface Pet {
@@ -29,6 +42,7 @@ export interface CalendarEvent {
   title: string;
   color: string; // e.g., 'bg-blue-500'
   isDraft?: boolean;
+  isPreset?: boolean; // 預設行事曆事件（由身份自動產生）
 }
 
 export enum AppRoute {
@@ -47,5 +61,7 @@ export enum AppRoute {
   PROFILE_EDIT = 'profile-edit',
   PROFILE_ARCHIVE = 'profile-archive',
   PROFILE_ARCHIVED_REMINDERS = 'profile-archived-reminders',
-  CHANGE_EMAIL = 'change-email'
+  CHANGE_EMAIL = 'change-email',
+  FOCUS_ANALYSIS = 'focus-analysis',
+  CALENDAR_ADMIN = 'calendar-admin'
 }
