@@ -147,6 +147,19 @@ const App: React.FC = () => {
     console.log('Fetching data for user:', userId);
     setIsLoadingData(true);
     try {
+      // 先取得最新 session，以確保能讀到 user metadata
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user;
+
+      // 從 auth 取得最新的名字與 email
+      const authName =
+        currentUser?.user_metadata?.full_name ||
+        currentUser?.user_metadata?.display_name ||
+        currentUser?.user_metadata?.name ||
+        currentUser?.email?.split('@')[0] ||
+        'Focus User';
+      const authEmail = currentUser?.email || 'user@example.com';
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -166,19 +179,31 @@ const App: React.FC = () => {
         if (data.tasks) setTasks(data.tasks);
         if (data.home_config) setHomeSections(data.home_config);
         if (data.placed_items) setPlacedItems(data.placed_items);
-        if (data.user_profile) setUserProfile(data.user_profile);
         if (data.focus_logs) setFocusLogs(data.focus_logs);
+
+        // 永遠從 auth 同步 email；若名字仍是預設值則一併更新
+        if (data.user_profile) {
+          const storedProfile = data.user_profile;
+          const isDefaultName = !storedProfile.name ||
+            storedProfile.name === 'Focus User' ||
+            storedProfile.name === '';
+          const syncedProfile = {
+            ...storedProfile,
+            email: authEmail,                        // 永遠同步 auth email
+            name: isDefaultName ? authName : storedProfile.name, // 僅在預設時填入
+          };
+          setUserProfile(syncedProfile);
+        } else {
+          // user_profile 欄位為空，建立預設值
+          setUserProfile(prev => ({ ...prev, name: authName, email: authEmail }));
+        }
       } else {
         console.log('New user detected, initializing data...');
-        // Need to get the latest session to get email/metadata safely
-        const { data: { session } } = await supabase.auth.getSession();
-        const currentUser = session?.user;
-
         setHasCompletedOnboarding(false);
         setHasCompletedTour(false);
         const initialData = {
           id: userId,
-          email: currentUser?.email,
+          email: authEmail,
           points: 0,
           has_completed_onboarding: false,
           has_completed_tour: false,
@@ -194,8 +219,8 @@ const App: React.FC = () => {
           auth_provider: currentUser?.app_metadata?.provider || 'email',
           user_profile: {
             ...userProfile,
-            name: currentUser?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Focus User',
-            email: currentUser?.email || 'user@example.com',
+            name: authName,
+            email: authEmail,
             registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
           },
           focus_logs: []

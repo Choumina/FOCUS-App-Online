@@ -55,18 +55,24 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginStart }) => {
     setIsLoading(true);
     try {
       if (manualMode === 'signup') {
+        const displayName = email.split('@')[0];
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            data: {
+              full_name: displayName,
+              display_name: displayName,
+            }
+          }
         });
         if (error) throw error;
-        // 若 Supabase 未設定 email 驗證，signUp 會自動建立 session（auto-login）
-        // 立即登出，確保使用者必須手動登入，不會被自動帶入 App
         if (data.session) {
-          await supabase.auth.signOut();
-          alert('註冊成功！請使用您的帳號密碼登入。');
+          // 直接自動登入，App.tsx 的 onAuthStateChange 會接管後續流程
+          // 不需要強制 signOut，讓使用者無縫進入 App
+          return;
         } else {
-          // Supabase 要求 email 驗證 — data.session 為 null
+          // Supabase 設定了 email 驗證 — data.session 為 null
           alert('註冊成功！\n\n請前往您的信箱（' + email + '），\n點擊驗證連結後即可登入。');
         }
         setManualMode('login');
