@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { AppRoute } from '../types';
 import ViewHeader from './ViewHeader';
+import { RotateCcw } from 'lucide-react';
 
-const SettingsView: React.FC<{navigateTo: (route: AppRoute) => void}> = ({ navigateTo }) => {
+interface SettingsViewProps {
+  navigateTo: (route: AppRoute) => void;
+  onResetTour?: () => void;
+}
+
+const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour }) => {
   const [tab, setTab] = useState<'notif' | 'block'>('notif');
-  
+  const [tourReset, setTourReset] = useState(false);
+
   const Toggle = ({label, value}: {label: string, value: boolean}) => (
     <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 mb-4 shadow-sm">
       <span className="text-sm font-bold text-gray-700">{label}</span>
@@ -14,8 +21,16 @@ const SettingsView: React.FC<{navigateTo: (route: AppRoute) => void}> = ({ navig
     </div>
   );
 
+  const handleResetTour = () => {
+    if (onResetTour) {
+      onResetTour();
+      setTourReset(true);
+      setTimeout(() => setTourReset(false), 2000);
+    }
+  };
+
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className="bg-gray-50 min-h-screen pb-24">
       <ViewHeader title="設定" onBack={() => navigateTo(AppRoute.HOME)} />
       <div className="p-6">
         <div className="bg-gray-200/50 rounded-full flex p-1 mb-8">
@@ -53,6 +68,28 @@ const SettingsView: React.FC<{navigateTo: (route: AppRoute) => void}> = ({ navig
                   <span className="text-gray-400 text-sm">10 &gt;</span>
                 </div>
                 <p className="text-[10px] text-gray-400 mt-2 px-2">專注提醒會發出通知音來提醒你保持專注，可在你容易分心時幫助你回神專注。</p>
+              </div>
+
+              {/* 導覽重置 */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">功能導覽</h3>
+                <button
+                  onClick={handleResetTour}
+                  disabled={tourReset}
+                  className="w-full flex items-center justify-between bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all disabled:opacity-60"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                      <RotateCcw size={17} className="text-indigo-500" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-bold text-gray-700">
+                        {tourReset ? '已重置，返回首頁即可觀看 ✓' : '重新觀看功能導覽'}
+                      </p>
+                      <p className="text-[11px] text-gray-400">以氣泡方式逐一介紹各功能</p>
+                    </div>
+                  </div>
+                </button>
               </div>
             </>
           ) : (

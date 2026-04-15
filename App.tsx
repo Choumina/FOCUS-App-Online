@@ -466,7 +466,7 @@ const App: React.FC = () => {
       case AppRoute.LEADERBOARD:
         return <LeaderboardView navigateTo={navigateTo} userProfile={userProfile} coins={coins} />;
       case AppRoute.SETTINGS:
-        return <SettingsView navigateTo={navigateTo} />;
+        return <SettingsView navigateTo={navigateTo} onResetTour={handleResetTour} />;
       case AppRoute.AI_CHAT:
         return <AIChatView navigateTo={navigateTo} setCalendarEvents={setCalendarEvents} tasks={tasks} />;
       case AppRoute.CALENDAR_DETAIL:
@@ -554,7 +554,20 @@ const App: React.FC = () => {
     }
   };
 
+  // 讓使用者可以從設定頁重新觀看功能導覽
+  const handleResetTour = () => {
+    setHasCompletedTour(false);
+    setIsTourVisible(false);
+    if (user) {
+      localStorage.removeItem(`focus_tour_${user.id}`);
+      supabase.from('users').update({ has_completed_tour: false }).eq('id', user.id).then(() => {});
+    }
+    // 導回首頁，tour effect 會在 1.5s 後自動觸發
+    navigateTo(AppRoute.HOME);
+  };
+
   const handleLogout = async () => {
+
     try {
       setIsLoadingData(true);
       await supabase.auth.signOut();
