@@ -176,24 +176,35 @@ const App: React.FC = () => {
       if (data) {
         console.log('Existing user:', data.email, '| authName:', authName);
 
-        // ── Onboarding / Tour 狀態 ──────────────────────────────────────
-        // DB 優先；但如果 DB 是 null/false，以 localStorage 為備份
-        // 這樣即使第一次儲存失敗，使用者也不會重複看到介紹
+        // ── Onboarding / Tour 狀態（三層保險） ─────────────────────────
+        // 1) DB 欄位（執行 SQL 後才有）
+        // 2) user_profile JSON 內嵌（不需要額外欄位，最穩健）
+        // 3) localStorage（同一瀏覽器備份）
+        const storedMeta = data.user_profile || {};
         const localOnboardingDone = localStorage.getItem(localOnboardingKey) === 'true';
         const localTourDone = localStorage.getItem(localTourKey) === 'true';
-        const onboardingDone = data.has_completed_onboarding === true || localOnboardingDone;
-        const tourDone = data.has_completed_tour === true || localTourDone;
+
+        const onboardingDone =
+          data.has_completed_onboarding === true ||   // DB 欄位
+          storedMeta._onboardingDone === true ||       // user_profile JSON
+          localOnboardingDone;                         // localStorage
+
+        const tourDone =
+          data.has_completed_tour === true ||
+          storedMeta._tourDone === true ||
+          localTourDone;
 
         setHasCompletedOnboarding(onboardingDone);
         setHasCompletedTour(tourDone);
 
-        // 若 DB 的值和本地不一致，修復 DB
+        // 若 DB 欄位存在但和本地不一致，修復 DB 欄位
         if (onboardingDone && !data.has_completed_onboarding) {
           supabase.from('users').update({ has_completed_onboarding: true }).eq('id', authUser.id).then(() => {});
         }
         if (tourDone && !data.has_completed_tour) {
           supabase.from('users').update({ has_completed_tour: true }).eq('id', authUser.id).then(() => {});
         }
+
 
         if (data.points !== undefined) _setCoins(data.points);
         if (data.tasks) setTasks(data.tasks);
@@ -252,10 +263,9 @@ const App: React.FC = () => {
           },
           focus_logs: []
         };
-        const { error: insertError } = await supabase.from('users').insert(initialData);
-        if (insertError) {
-          console.error('Insert user error:', insertError);
-          handleSupabaseError(insertError, OperationType.CREATE, `users/${authUser.id}`);
+        const { error: upsertError } = await supabase.from('users').upsert(initialData, { onConflict: 'id' });
+        if (upsertError) {
+          console.error('Upsert user error:', upsertError);
         }
         setTasks(initialData.tasks);
         setUserProfile(initialData.user_profile);
@@ -525,10 +535,16 @@ const App: React.FC = () => {
   const handleOnboardingComplete = async () => {
     setHasCompletedOnboarding(true);
     if (user) {
-      // localStorage 備份：確保即使 DB 儲存失敗，下次登入也不會重複顯示介紹
+      // 三層儲存：localStorage + user_profile JSON + DB 欄位
       localStorage.setItem(`focus_onboarding_${user.id}`, 'true');
+      // 最穩健：直接存進 user_profile JSON（不需要新增 DB 欄位）
+      setUserProfile(prev => ({ ...prev, _onboardingDone: true }));
       try {
-        await supabase.from('users').update({ has_completed_onboarding: true }).eq('id', user.id);
+        // 同步更新 has_completed_onboarding 欄位（若欄位不存在，此行會靜默失敗但不影響其他備份）
+        await supabase.from('users').update({
+          has_completed_onboarding: true,
+          user_profile: { ...userProfile, _onboardingDone: true }
+        }).eq('id', user.id);
       } catch (error) {
         console.error('Failed to save onboarding state:', error);
       }
@@ -544,10 +560,14 @@ const App: React.FC = () => {
     }
 
     if (user) {
-      // localStorage 備份：確保即使 DB 儲存失敗，下次登入也不會重複顯示導覽
+      // 三層儲存：localStorage + user_profile JSON + DB 欄位
       localStorage.setItem(`focus_tour_${user.id}`, 'true');
+      setUserProfile(prev => ({ ...prev, _tourDone: true }));
       try {
-        await supabase.from('users').update({ has_completed_tour: true }).eq('id', user.id);
+        await supabase.from('users').update({
+          has_completed_tour: true,
+          user_profile: { ...userProfile, _tourDone: true }
+        }).eq('id', user.id);
       } catch (error) {
         console.error('Failed to save tour state:', error);
       }
@@ -560,9 +580,12 @@ const App: React.FC = () => {
     setIsTourVisible(false);
     if (user) {
       localStorage.removeItem(`focus_tour_${user.id}`);
-      supabase.from('users').update({ has_completed_tour: false }).eq('id', user.id).then(() => {});
+      setUserProfile(prev => ({ ...prev, _tourDone: false }));
+      supabase.from('users').update({
+        has_completed_tour: false,
+        user_profile: { ...userProfile, _tourDone: false }
+      }).eq('id', user.id).then(() => {});
     }
-    // 導回首頁，tour effect 會在 1.5s 後自動觸發
     navigateTo(AppRoute.HOME);
   };
 
