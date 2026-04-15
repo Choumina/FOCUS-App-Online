@@ -147,9 +147,6 @@ const App: React.FC = () => {
     console.log('Fetching data for user:', authUser.id);
     setIsLoadingData(true);
     try {
-      // 直接使用已知的 User 物件，不再重新呼叫 getSession()，避免時序問題
-      // Google OAuth: user_metadata.full_name / avatar_url
-      // Email 註冊: user_metadata.display_name / full_name
       const authName =
         authUser.user_metadata?.full_name ||
         authUser.user_metadata?.display_name ||
@@ -157,9 +154,13 @@ const App: React.FC = () => {
         authUser.email?.split('@')[0] ||
         'Focus User';
       const authEmail = authUser.email || 'user@example.com';
-      // Google 登入會有 avatar_url
       const authAvatar = authUser.user_metadata?.avatar_url ||
         authUser.user_metadata?.picture || '';
+      const isGoogleUser = authUser.app_metadata?.provider === 'google';
+
+      // localStorage key，用來備份 onboarding/tour 狀態
+      const localOnboardingKey = `focus_onboarding_${authUser.id}`;
+      const localTourKey = `focus_tour_${authUser.id}`;
 
       const { data, error } = await supabase
         .from('users')
@@ -173,32 +174,57 @@ const App: React.FC = () => {
       }
 
       if (data) {
-        console.log('User data found:', data.email, '| authName:', authName);
-        setHasCompletedOnboarding(data.has_completed_onboarding ?? false);
-        setHasCompletedTour(data.has_completed_tour ?? false);
+        console.log('Existing user:', data.email, '| authName:', authName);
+
+        // ── Onboarding / Tour 狀態 ──────────────────────────────────────
+        // DB 優先；但如果 DB 是 null/false，以 localStorage 為備份
+        // 這樣即使第一次儲存失敗，使用者也不會重複看到介紹
+        const localOnboardingDone = localStorage.getItem(localOnboardingKey) === 'true';
+        const localTourDone = localStorage.getItem(localTourKey) === 'true';
+        const onboardingDone = data.has_completed_onboarding === true || localOnboardingDone;
+        const tourDone = data.has_completed_tour === true || localTourDone;
+
+        setHasCompletedOnboarding(onboardingDone);
+        setHasCompletedTour(tourDone);
+
+        // 若 DB 的值和本地不一致，修復 DB
+        if (onboardingDone && !data.has_completed_onboarding) {
+          supabase.from('users').update({ has_completed_onboarding: true }).eq('id', authUser.id).then(() => {});
+        }
+        if (tourDone && !data.has_completed_tour) {
+          supabase.from('users').update({ has_completed_tour: true }).eq('id', authUser.id).then(() => {});
+        }
+
         if (data.points !== undefined) _setCoins(data.points);
         if (data.tasks) setTasks(data.tasks);
         if (data.home_config) setHomeSections(data.home_config);
         if (data.placed_items) setPlacedItems(data.placed_items);
         if (data.focus_logs) setFocusLogs(data.focus_logs);
 
-        // 每次登入都從 auth 同步最新 email、名字、大頭貼
+        // ── 個人資料同步 ─────────────────────────────────────────────────
         const storedProfile = data.user_profile || {};
+        const emailPrefix = authEmail.split('@')[0];
+
+        // 「預設名字」定義：空值、'Focus User'、email 前綴、picsum 隨機
         const isDefaultName = !storedProfile.name ||
           storedProfile.name === 'Focus User' ||
-          storedProfile.name === '';
+          storedProfile.name === '' ||
+          storedProfile.name === emailPrefix; // 舊版本會存 email 前綴，也視為未自訂
+
         const isDefaultAvatar = !storedProfile.avatar ||
           storedProfile.avatar.includes('picsum.photos/seed/user');
+
         const syncedProfile = {
           ...storedProfile,
-          email: authEmail,
-          name: isDefaultName ? authName : storedProfile.name,
-          // Google 登入時同步大頭貼（如果使用者沒有手動更換過）
-          avatar: (isDefaultAvatar && authAvatar) ? authAvatar : storedProfile.avatar,
+          email: authEmail,  // 永遠同步 auth email
+          // Google 用戶：永遠用真實名字；Email 用戶：只在預設時更新
+          name: (isGoogleUser || isDefaultName) ? authName : storedProfile.name,
+          avatar: (isDefaultAvatar && authAvatar) ? authAvatar : (storedProfile.avatar || authAvatar || userProfile.avatar),
         };
         setUserProfile(syncedProfile);
       } else {
-        console.log('New user detected, initializing...');
+        // ── 全新使用者 ───────────────────────────────────────────────────
+        console.log('New user, initializing...');
         setHasCompletedOnboarding(false);
         setHasCompletedTour(false);
         const initialData = {
@@ -242,6 +268,7 @@ const App: React.FC = () => {
   };
 
   // Sync state to Supabase when it changes
+
   // 注意：has_completed_onboarding 和 has_completed_tour 不在此 sync 中，
   // 它們由 handleOnboardingComplete / handleTourComplete 直接更新，
   // 避免 stale closure 覆蓋正確值。
@@ -498,10 +525,12 @@ const App: React.FC = () => {
   const handleOnboardingComplete = async () => {
     setHasCompletedOnboarding(true);
     if (user) {
+      // localStorage 備份：確保即使 DB 儲存失敗，下次登入也不會重複顯示介紹
+      localStorage.setItem(`focus_onboarding_${user.id}`, 'true');
       try {
         await supabase.from('users').update({ has_completed_onboarding: true }).eq('id', user.id);
       } catch (error) {
-        handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
+        console.error('Failed to save onboarding state:', error);
       }
     }
   };
@@ -510,16 +539,17 @@ const App: React.FC = () => {
     setIsTourVisible(false);
     setHasCompletedTour(true);
     
-    // Smoothly scroll back to top after tour is finished
     if (mainRef.current) {
       mainRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     if (user) {
+      // localStorage 備份：確保即使 DB 儲存失敗，下次登入也不會重複顯示導覽
+      localStorage.setItem(`focus_tour_${user.id}`, 'true');
       try {
         await supabase.from('users').update({ has_completed_tour: true }).eq('id', user.id);
       } catch (error) {
-        handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
+        console.error('Failed to save tour state:', error);
       }
     }
   };
