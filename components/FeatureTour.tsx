@@ -85,8 +85,6 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible,
     return () => window.removeEventListener('resize', updateCoords);
   }, [currentStep]);
 
-  if (!isVisible || steps.length === 0) return null;
-
   const step = steps[currentStep];
 
   const handleNext = () => {
@@ -99,57 +97,61 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible,
     }
   };
 
+  // 避免在座標尚未計算出來（全 0）或隱藏狀態下顯示破綻
+  const isActuallyVisible = isVisible && 
+    isReady && 
+    (coords.width > 0 || coords.height > 0);
+
   return (
-    <div className={`fixed inset-0 z-[300] transition-opacity duration-300 ${isReady ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+    <div className={`fixed inset-0 z-[300] transition-opacity duration-500 ${isActuallyVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
       {/* Backdrop with hole */}
       <div className="absolute inset-0 bg-black/60 transition-all duration-500" style={{
         clipPath: `polygon(0% 0%, 0% 100%, ${coords.left}px 100%, ${coords.left}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top + coords.height}px, ${coords.left}px ${coords.top + coords.height}px, ${coords.left}px 100%, 100% 100%, 100% 0%)`
       }} />
 
       {/* Highlight Box */}
-      <motion.div
-        initial={false}
-        animate={{
-          top: coords.top - 8,
-          left: coords.left - 8,
-          width: coords.width + 16,
-          height: coords.height + 16,
-        }}
-        className="absolute border-2 border-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.5)] pointer-events-none"
-      >
-        <motion.div 
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="absolute inset-0 border-2 border-white/50 rounded-xl"
-        />
-      </motion.div>
+      {isActuallyVisible && (
+        <motion.div
+          initial={false}
+          animate={{
+            top: coords.top - 8,
+            left: coords.left - 8,
+            width: coords.width + 16,
+            height: coords.height + 16,
+          }}
+          className="absolute border-2 border-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.5)] pointer-events-none"
+        >
+          <motion.div 
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ duration: 2, repeat: Infinity }}
+            className="absolute inset-0 border-2 border-white/50 rounded-xl"
+          />
+        </motion.div>
+      )}
 
       {/* Tooltip */}
       <AnimatePresence mode="wait">
-        <motion.div
-          key={currentStep}
-          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-          animate={{ 
-            opacity: 1, 
-            y: 0, 
-            scale: 1,
-            // Enhanced clamping logic:
-            // 1. If lower half of screen, put it above target.
-            // 2. If it is still too high/low, clamp it within [20, innerHeight - 250]
-            top: coords.top > (window.innerHeight / 2) 
-              ? Math.max(20, coords.top - 220) 
-              : Math.min(window.innerHeight - 250, coords.top + coords.height + 20),
-            left: Math.max(20, Math.min(window.innerWidth - 300, coords.left + coords.width / 2 - 140))
-          }}
-          exit={{ opacity: 0, scale: 0.95 }}
-          className="absolute w-[280px] bg-white rounded-3xl p-5 shadow-2xl pointer-events-auto border border-gray-100 z-[310]"
-        >
-          <div className="flex items-start justify-between mb-3">
-            <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
-              <Info size={18} />
+        {isActuallyVisible && (
+          <motion.div
+            key={currentStep}
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ 
+              opacity: 1, 
+              y: 0, 
+              scale: 1,
+              top: coords.top > (window.innerHeight / 2) 
+                ? Math.max(20, coords.top - 240) 
+                : Math.min(window.innerHeight - 280, coords.top + coords.height + 20),
+              left: Math.max(20, Math.min(window.innerWidth - 300, coords.left + coords.width / 2 - 140))
+            }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute w-[280px] bg-white rounded-3xl p-5 shadow-2xl pointer-events-auto border border-gray-100 z-[310]"
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
+                <Info size={18} />
+              </div>
             </div>
-            {/* 移除關閉按鈕，強制導覽完成 */}
-          </div>
 
           <h4 className="text-lg font-black text-gray-800 mb-1">{step.title}</h4>
           <p className="text-sm text-gray-500 font-medium leading-relaxed mb-6">
@@ -174,6 +176,7 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible,
             className={`absolute left-1/2 -translate-x-1/2 w-4 h-4 bg-white rotate-45 border-l border-t border-gray-100 ${coords.top > window.innerHeight / 2 ? '-bottom-2 border-l-0 border-t-0 border-r border-b' : '-top-2'}`}
           />
         </motion.div>
+      )}
       </AnimatePresence>
     </div>
   );

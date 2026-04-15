@@ -29,6 +29,49 @@ import FocusAnalysisView from './components/FocusAnalysisView';
 import CalendarAdminView from './components/CalendarAdminView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
+const tourSteps = [
+  {
+    targetId: 'home-profile',
+    title: '個人中心',
+    content: '這裡是你的個人中心，點擊頭像可以進入帳號設定、查看等級與積分紀錄。'
+  },
+  {
+    targetId: 'home-tasks',
+    title: '提醒事項',
+    content: '你最近的待辦任務會顯示在這裡，點擊卡片可以查看完整的任務清單。'
+  },
+  {
+    targetId: 'home-timer',
+    title: '番茄鐘',
+    content: '想要開始一段專注時光嗎？點擊番茄鐘卡片進入專注計時器。'
+  },
+  {
+    targetId: 'home-calendar',
+    title: '行事曆',
+    content: '這裡是你的月曆檢視，可以查看每天的行程安排與 AI 建議的學習進度。'
+  },
+  {
+    targetId: 'home-games-area',
+    title: '遊戲專區',
+    content: '向下滾動即可看到遊戲專區！你可以在這裡與寵物互動、參加賽馬或查看积分排行榜。'
+  },
+  {
+    targetId: 'nav-focus',
+    title: 'Focus 核心',
+    content: '底部選單可以隨時切換功能。這個按鈕會帶你回到目前的主頁面。'
+  },
+  {
+    targetId: 'nav-game',
+    title: '遊戲世界',
+    content: '想休息一下？點擊這裡進入寵物空間，可以佈置你的房間或參加賽馬。'
+  },
+  {
+    targetId: 'nav-ai',
+    title: 'AI 助手',
+    content: '這是你的學術夥伴！讓 AI 幫你拆解複雜任務、分析進度，助你一臂之力。'
+  }
+];
+
 const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(AppRoute.HOME);
   const [user, setUser] = useState<User | null>(null);
@@ -137,11 +180,23 @@ const App: React.FC = () => {
 
   // Set tour visible after onboarding is cleared and user is on Home page
   useEffect(() => {
-    if (user && hasCompletedOnboarding === true && hasCompletedTour === false && currentRoute === AppRoute.HOME && !isTourVisible) {
-      const timer = setTimeout(() => setIsTourVisible(true), 1500); // 延長延遲確保 HomeView 已完全渲染
+    // Only trigger if all conditions are met and we haven't already shown it
+    const shouldShowTour = 
+      user && 
+      hasCompletedOnboarding === true && 
+      hasCompletedTour === false && 
+      currentRoute === AppRoute.HOME && 
+      !isTourVisible &&
+      !isInitializing;
+
+    if (shouldShowTour) {
+      // Use a shorter delay and ensure it's not reset by every render
+      const timer = setTimeout(() => {
+        setIsTourVisible(true);
+      }, 800); 
       return () => clearTimeout(timer);
     }
-  }, [user, hasCompletedOnboarding, hasCompletedTour, currentRoute, isTourVisible]);
+  }, [user?.id, hasCompletedOnboarding, hasCompletedTour, currentRoute, isTourVisible, isInitializing]);
 
   const fetchUserData = async (authUser: User) => {
     console.log('Fetching data for user:', authUser.id);
@@ -719,49 +774,6 @@ const App: React.FC = () => {
       setIsLoadingData(false);
     }
   };
-
-  const tourSteps = [
-    {
-      targetId: 'home-profile',
-      title: '個人中心',
-      content: '這裡是你的個人中心，點擊頭像可以進入帳號設定、查看等級與積分紀錄。'
-    },
-    {
-      targetId: 'home-tasks',
-      title: '提醒事項',
-      content: '你最近的待辦任務會顯示在這裡，點擊卡片可以查看完整的任務清單。'
-    },
-    {
-      targetId: 'home-timer',
-      title: '番茄鐘',
-      content: '想要開始一段專注時光嗎？點擊番茄鐘卡片進入專注計時器。'
-    },
-    {
-      targetId: 'home-calendar',
-      title: '行事曆',
-      content: '這裡是你的月曆檢視，可以查看每天的行程安排與 AI 建議的學習進度。'
-    },
-    {
-      targetId: 'home-games-area',
-      title: '遊戲專區',
-      content: '向下滾動即可看到遊戲專區！你可以在這裡與寵物互動、參加賽馬或查看积分排行榜。'
-    },
-    {
-      targetId: 'nav-focus',
-      title: 'Focus 核心',
-      content: '底部選單可以隨時切換功能。這個按鈕會帶你回到目前的主頁面。'
-    },
-    {
-      targetId: 'nav-game',
-      title: '遊戲世界',
-      content: '想休息一下？點擊這裡進入寵物空間，可以佈置你的房間或參加賽馬。'
-    },
-    {
-      targetId: 'nav-ai',
-      title: 'AI 助手',
-      content: '這是你的學術夥伴！讓 AI 幫你拆解複雜任務、分析進度，助你一臂之力。'
-    }
-  ];
 
   // 1. Show a clean loading screen during initialization OR data fetching
   if (isInitializing || (user && hasCompletedOnboarding === null)) {
