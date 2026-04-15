@@ -82,7 +82,7 @@ const App: React.FC = () => {
         setUser(sessionUser);
         if (lastFetchedUserId.current !== sessionUser.id) {
           lastFetchedUserId.current = sessionUser.id;
-          fetchUserData(sessionUser.id);
+          fetchUserData(sessionUser); // 傳入完整 User 物件
         }
       }
     };
@@ -143,36 +143,37 @@ const App: React.FC = () => {
     }
   }, [user, hasCompletedOnboarding, hasCompletedTour, currentRoute, isTourVisible]);
 
-  const fetchUserData = async (userId: string) => {
-    console.log('Fetching data for user:', userId);
+  const fetchUserData = async (authUser: User) => {
+    console.log('Fetching data for user:', authUser.id);
     setIsLoadingData(true);
     try {
-      // 先取得最新 session，以確保能讀到 user metadata
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user;
-
-      // 從 auth 取得最新的名字與 email
+      // 直接使用已知的 User 物件，不再重新呼叫 getSession()，避免時序問題
+      // Google OAuth: user_metadata.full_name / avatar_url
+      // Email 註冊: user_metadata.display_name / full_name
       const authName =
-        currentUser?.user_metadata?.full_name ||
-        currentUser?.user_metadata?.display_name ||
-        currentUser?.user_metadata?.name ||
-        currentUser?.email?.split('@')[0] ||
+        authUser.user_metadata?.full_name ||
+        authUser.user_metadata?.display_name ||
+        authUser.user_metadata?.name ||
+        authUser.email?.split('@')[0] ||
         'Focus User';
-      const authEmail = currentUser?.email || 'user@example.com';
+      const authEmail = authUser.email || 'user@example.com';
+      // Google 登入會有 avatar_url
+      const authAvatar = authUser.user_metadata?.avatar_url ||
+        authUser.user_metadata?.picture || '';
 
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', userId)
+        .eq('id', authUser.id)
         .single();
 
       if (error && error.code !== 'PGRST116') {
         console.error('Supabase fetch error:', error);
-        handleSupabaseError(error, OperationType.GET, `users/${userId}`);
+        handleSupabaseError(error, OperationType.GET, `users/${authUser.id}`);
       }
 
       if (data) {
-        console.log('User data found:', data.email);
+        console.log('User data found:', data.email, '| authName:', authName);
         setHasCompletedOnboarding(data.has_completed_onboarding ?? false);
         setHasCompletedTour(data.has_completed_tour ?? false);
         if (data.points !== undefined) _setCoins(data.points);
@@ -181,28 +182,27 @@ const App: React.FC = () => {
         if (data.placed_items) setPlacedItems(data.placed_items);
         if (data.focus_logs) setFocusLogs(data.focus_logs);
 
-        // 永遠從 auth 同步 email；若名字仍是預設值則一併更新
-        if (data.user_profile) {
-          const storedProfile = data.user_profile;
-          const isDefaultName = !storedProfile.name ||
-            storedProfile.name === 'Focus User' ||
-            storedProfile.name === '';
-          const syncedProfile = {
-            ...storedProfile,
-            email: authEmail,                        // 永遠同步 auth email
-            name: isDefaultName ? authName : storedProfile.name, // 僅在預設時填入
-          };
-          setUserProfile(syncedProfile);
-        } else {
-          // user_profile 欄位為空，建立預設值
-          setUserProfile(prev => ({ ...prev, name: authName, email: authEmail }));
-        }
+        // 每次登入都從 auth 同步最新 email、名字、大頭貼
+        const storedProfile = data.user_profile || {};
+        const isDefaultName = !storedProfile.name ||
+          storedProfile.name === 'Focus User' ||
+          storedProfile.name === '';
+        const isDefaultAvatar = !storedProfile.avatar ||
+          storedProfile.avatar.includes('picsum.photos/seed/user');
+        const syncedProfile = {
+          ...storedProfile,
+          email: authEmail,
+          name: isDefaultName ? authName : storedProfile.name,
+          // Google 登入時同步大頭貼（如果使用者沒有手動更換過）
+          avatar: (isDefaultAvatar && authAvatar) ? authAvatar : storedProfile.avatar,
+        };
+        setUserProfile(syncedProfile);
       } else {
-        console.log('New user detected, initializing data...');
+        console.log('New user detected, initializing...');
         setHasCompletedOnboarding(false);
         setHasCompletedTour(false);
         const initialData = {
-          id: userId,
+          id: authUser.id,
           email: authEmail,
           points: 0,
           has_completed_onboarding: false,
@@ -216,11 +216,12 @@ const App: React.FC = () => {
             { id: 'env4', x: 80, y: 20, char: '🖼️', isReacting: false, clickCount: 0, areaId: 'blue' },
           ],
           tasks: [],
-          auth_provider: currentUser?.app_metadata?.provider || 'email',
+          auth_provider: authUser.app_metadata?.provider || 'email',
           user_profile: {
             ...userProfile,
             name: authName,
             email: authEmail,
+            avatar: authAvatar || userProfile.avatar,
             registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
           },
           focus_logs: []
@@ -228,7 +229,7 @@ const App: React.FC = () => {
         const { error: insertError } = await supabase.from('users').insert(initialData);
         if (insertError) {
           console.error('Insert user error:', insertError);
-          handleSupabaseError(insertError, OperationType.CREATE, `users/${userId}`);
+          handleSupabaseError(insertError, OperationType.CREATE, `users/${authUser.id}`);
         }
         setTasks(initialData.tasks);
         setUserProfile(initialData.user_profile);
