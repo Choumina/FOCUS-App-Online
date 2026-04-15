@@ -254,7 +254,9 @@ const CalendarAdminView: React.FC<CalendarAdminViewProps> = ({ navigateTo, event
             <p className="text-xs mt-1">點擊右上角「新增」建立第一筆行程</p>
           </div>
         ) : (
-          Object.entries(grouped).map(([date, dayEvents]) => (
+          Object.entries(grouped).map(([date, dayEvents]) => {
+            const events = dayEvents as CalendarEvent[];
+            return (
             <div key={date}>
               <div className="flex items-center gap-2 mb-2 px-1">
                 <div className="w-2 h-2 bg-blue-400 rounded-full" />
@@ -262,10 +264,10 @@ const CalendarAdminView: React.FC<CalendarAdminViewProps> = ({ navigateTo, event
                   {new Date(date + 'T00:00:00').toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' })}
                 </span>
                 <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-[10px] text-gray-400 font-bold">{dayEvents.length} 筆</span>
+                <span className="text-[10px] text-gray-400 font-bold">{events.length} 筆</span>
               </div>
               <div className="space-y-2">
-                {dayEvents.map(event => (
+                {events.map(event => (
                   <div key={event.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
                     {editingId === event.id && editForm ? (
                       /* Edit Mode */
@@ -336,7 +338,8 @@ const CalendarAdminView: React.FC<CalendarAdminViewProps> = ({ navigateTo, event
                 ))}
               </div>
             </div>
-          ))
+          );
+        })
         )}
       </div>
 

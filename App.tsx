@@ -283,8 +283,7 @@ const App: React.FC = () => {
           supabase.from('users')
             .update({ has_completed_onboarding: false, has_completed_tour: false })
             .eq('id', authUser.id)
-            .then(() => {})
-            .catch(() => {}); // 欄位不存在時靜默忽略
+            .then(() => {}, () => {}); // 欄位不存在時靜默忽略
         }
 
         setTasks([]);
@@ -572,8 +571,7 @@ const App: React.FC = () => {
       supabase.from('users')
         .update({ has_completed_onboarding: true })
         .eq('id', user.id)
-        .then(() => {})
-        .catch(() => {});
+        .then(() => {}, () => {});
     }
   };
 
@@ -602,8 +600,7 @@ const App: React.FC = () => {
       supabase.from('users')
         .update({ has_completed_tour: true })
         .eq('id', user.id)
-        .then(() => {})
-        .catch(() => {});
+        .then(() => {}, () => {});
     }
   };
 
@@ -617,7 +614,7 @@ const App: React.FC = () => {
       supabase.from('users').update({
         has_completed_tour: false,
         user_profile: { ...userProfile, _tourDone: false }
-      }).eq('id', user.id).then(() => {});
+      }).eq('id', user.id).then(() => {}, () => {});
     }
     navigateTo(AppRoute.HOME);
   };
