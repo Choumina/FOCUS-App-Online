@@ -17,72 +17,99 @@ interface EditProfileViewProps {
 
 // 根據身份產生預設行事曆事件
 const generatePresetEvents = (identity: UserIdentity): CalendarEvent[] => {
+  const events: CalendarEvent[] = [];
   const today = new Date();
-
-  const makeEvent = (dayOffset: number, hour: number, title: string, color: string, heightHours = 1): CalendarEvent => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + dayOffset);
-    const dateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-    return {
-      id: `preset-${identity}-${dayOffset}-${hour}`,
-      date: dateStr,
+  
+  // Helper to add a single date event
+  const addEvent = (date: string, hour: number, title: string, color: string, height = 1.5) => {
+    events.push({
+      id: `preset-${identity}-${date}-${hour}-${title}`,
+      date,
       top: hour * 40,
-      height: heightHours * 40,
+      height: height * 40,
       title,
       color,
       isDraft: false,
       isPreset: true,
-    };
+    });
+  };
+
+  // Helper to add a date range (full day indicators)
+  const addRange = (start: string, end: string, title: string, color: string) => {
+    const s = new Date(start);
+    const e = new Date(end);
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      const dateStr = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+      addEvent(dateStr, 8, title, color, 12); // Covers prime time (8am to 8pm)
+    }
+  };
+
+  // 1. ADD FIXED 2025/2026 ACADEMIC DATES
+  if (identity === 'university') {
+    // College 2025/2026 Schedule
+    const years = [2025, 2026];
+    years.forEach(y => {
+      addRange(`${y}-04-13`, `${y}-04-19`, '🔴 期中考試週', 'bg-red-200');
+      addRange(`${y}-06-08`, `${y}-06-14`, '🔴 期末考試週', 'bg-red-200');
+      addRange(`${y}-10-19`, `${y}-10-25`, '🔴 期中考試週', 'bg-red-200');
+      addRange(`${y}-12-14`, `${y}-12-20`, '🔴 期末考試週', 'bg-red-200');
+      
+      addRange(`${y}-04-01`, `${y}-04-07`, '🟢 春假連假 (Early Apr)', 'bg-green-200');
+      addRange(`${y}-06-15`, `${y}-08-31`, '🟢 暑假：Summer Break', 'bg-green-100');
+      addRange(`${y}-12-21`, `${y}-12-31`, '🟢 寒假：Winter Break', 'bg-green-100');
+    });
+  } else if (identity === 'high_school') {
+    // High School 2025/2026 Schedule
+    const years = [2025, 2026];
+    years.forEach(y => {
+      addRange(`${y}-05-11`, `${y}-05-17`, '🔴 高中段考週', 'bg-red-200');
+      addRange(`${y}-06-21`, `${y}-06-28`, '🔴 高中期末考', 'bg-red-200');
+      addRange(`${y}-10-05`, `${y}-10-11`, '🔴 高中段考週', 'bg-red-200');
+      addRange(`${y}-11-16`, `${y}-11-22`, '🔴 高中段考週', 'bg-red-200');
+      
+      addRange(`${y}-02-01`, `${y}-02-07`, '📂 學習歷程檔案整理 (Early Feb)', 'bg-purple-200');
+      addRange(`${y}-06-24`, `${y}-06-30`, '📂 學習歷程檔案上傳 (Late Jun)', 'bg-purple-200');
+      addRange(`${y}-08-10`, `${y}-08-16`, '📂 學習歷程檔案確認 (Mid Aug)', 'bg-purple-200');
+      
+      addRange(`${y}-01-20`, `${y}-02-15`, '🟢 寒假：Winter Holiday', 'bg-green-100');
+      addRange(`${y}-07-01`, `${y}-08-31`, '🟢 暑假：Summer Holiday', 'bg-green-100');
+    });
+  }
+
+  // 2. ADD RELATIVE "DEFAULT WEEK" EVENTS FOR IMMEDIATE VISIBILITY
+  const formatDate = (offset: number) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + offset);
+    return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
   };
 
   if (identity === 'high_school') {
-    return [
-      makeEvent(0, 8, '🏫 早自習', 'bg-blue-200', 1),
-      makeEvent(0, 9, '📖 國文課', 'bg-blue-200', 1),
-      makeEvent(0, 10, '📐 數學課', 'bg-purple-200', 1),
-      makeEvent(0, 13, '🔬 自然科', 'bg-green-200', 2),
-      makeEvent(0, 17, '📝 回家作業時間', 'bg-yellow-200', 2),
-      makeEvent(1, 8, '🏫 早自習', 'bg-blue-200', 1),
-      makeEvent(1, 9, '🌍 英文課', 'bg-orange-200', 1),
-      makeEvent(1, 12, '🍱 午休', 'bg-gray-100', 1),
-      makeEvent(1, 16, '🏃 課後運動', 'bg-green-200', 1),
-      makeEvent(2, 9, '📊 社會科', 'bg-yellow-200', 1),
-      makeEvent(2, 14, '🎨 藝術課', 'bg-pink-200', 1),
-      makeEvent(2, 16, '📚 自習時間', 'bg-blue-100', 1.5),
-      makeEvent(5, 10, '📝 模擬考複習', 'bg-red-200', 3),
-      makeEvent(6, 10, '🎯 週計畫整理', 'bg-purple-200', 1),
-    ];
+    // Monday-Friday schedule
+    for (let i = -today.getDay() + 1; i <= -today.getDay() + 5; i++) {
+        addEvent(formatDate(i), 8, '🏫 早自習', 'bg-blue-100', 1);
+        addEvent(formatDate(i), 9, '📖 國文/英文/數學', 'bg-blue-200', 3);
+        addEvent(formatDate(i), 12, '🍱 午餐午休', 'bg-gray-100', 1);
+        addEvent(formatDate(i), 13, '🔬 物理/化學/社會', 'bg-purple-200', 3);
+        addEvent(formatDate(i), 19, '📝 晚自習', 'bg-indigo-100', 2.5);
+    }
   } else if (identity === 'university') {
-    return [
-      makeEvent(0, 9, '📖 必修課 - 微積分', 'bg-blue-200', 1.5),
-      makeEvent(0, 13, '💻 程式設計實習', 'bg-purple-200', 2),
-      makeEvent(0, 18, '📚 社團/讀書會', 'bg-green-200', 1.5),
-      makeEvent(1, 10, '🎓 專業選修課', 'bg-orange-200', 2),
-      makeEvent(1, 14, '🔬 實驗課', 'bg-green-200', 3),
-      makeEvent(2, 9, '📝 英文課', 'bg-yellow-200', 1.5),
-      makeEvent(2, 14, '💡 自主學習', 'bg-blue-100', 2),
-      makeEvent(2, 19, '🎮 休閒時間', 'bg-gray-100', 1),
-      makeEvent(3, 10, '👨‍💻 專題討論', 'bg-pink-200', 2),
-      makeEvent(4, 9, '📖 期末複習', 'bg-red-200', 2),
-      makeEvent(4, 14, '🤝 求職準備/履歷', 'bg-purple-200', 1.5),
-      makeEvent(5, 11, '☕ 自由學習/看書', 'bg-blue-100', 2),
-      makeEvent(6, 14, '🗓️ 下週規劃', 'bg-yellow-200', 1),
-    ];
+    addEvent(formatDate(0), 10, '🎓 必修：專業科目', 'bg-blue-200', 2);
+    addEvent(formatDate(0), 14, '💻 實驗/實作', 'bg-purple-200', 3);
+    addEvent(formatDate(1), 9, '🗣️ 通識：外語討論', 'bg-green-200', 1.5);
+    addEvent(formatDate(1), 13, '📊 統計學', 'bg-blue-200', 2);
+    addEvent(formatDate(2), 10, '💡 創業與創新', 'bg-orange-200', 2);
+    addEvent(formatDate(2), 15, '🎨 藝術欣賞', 'bg-pink-100', 1.5);
+    addEvent(formatDate(3), 11, '📚 讀書會/專題', 'bg-cyan-100', 2);
+    addEvent(formatDate(4), 14, '🏃 體育/重訓', 'bg-green-100', 1);
   } else {
-    // other
-    return [
-      makeEvent(0, 9, '☀️ 晨間規劃', 'bg-yellow-200', 0.5),
-      makeEvent(0, 10, '📋 工作/學習任務', 'bg-blue-200', 3),
-      makeEvent(0, 14, '🍵 午休', 'bg-gray-100', 1),
-      makeEvent(0, 17, '🏃 運動時間', 'bg-green-200', 1),
-      makeEvent(1, 9, '📚 自我進修', 'bg-purple-200', 2),
-      makeEvent(1, 14, '💼 個人專案', 'bg-blue-200', 2),
-      makeEvent(2, 10, '📝 覆盤與反思', 'bg-orange-200', 1),
-      makeEvent(4, 10, '🎯 週目標設定', 'bg-red-200', 1),
-      makeEvent(6, 10, '📖 閱讀時間', 'bg-green-200', 1.5),
-      makeEvent(6, 15, '🗓️ 下週規劃', 'bg-yellow-200', 1),
-    ];
+    addEvent(formatDate(0), 9, '☀️ 晨間日誌', 'bg-yellow-100', 1);
+    addEvent(formatDate(0), 10, '🏢 專案開發', 'bg-blue-100', 3.5);
+    addEvent(formatDate(1), 10, '💼 工作會議', 'bg-purple-100', 2);
+    addEvent(formatDate(1), 14, '🎨 技能進修', 'bg-green-100', 2);
+    addEvent(formatDate(3), 9, '🎯 週計畫覆盤', 'bg-orange-100', 1.5);
   }
+
+  return events;
 };
 
 const identityOptions: { value: UserIdentity; label: string; emoji: string; desc: string; icon: React.ReactNode; color: string; bg: string }[] = [

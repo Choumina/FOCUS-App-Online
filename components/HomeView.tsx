@@ -26,6 +26,7 @@ interface HomeViewProps {
   timerTimeLeft: number;
   visibleSubSections: Record<string, string[]>;
   setVisibleSubSections: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
+  userRank: number | string;
 }
 
 const allSubSections: Record<string, { id: string, name: string }[]> = {
@@ -81,7 +82,7 @@ const SortableSubItem = ({ id, children }: { id: string; children: React.ReactNo
   );
 };
 
-const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, archiveTask, calendarEvents, sections, setSections, userProfile, focusLogs, activeSessionSeconds = 0, isTourVisible, timerTimeLeft, visibleSubSections, setVisibleSubSections }) => {
+const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, archiveTask, calendarEvents, sections, setSections, userProfile, focusLogs, activeSessionSeconds = 0, isTourVisible, timerTimeLeft, visibleSubSections, setVisibleSubSections, userRank }) => {
 
   const [showAddMenu, setShowAddMenu] = useState<string | null>(null);
   const [confirmTask, setConfirmTask] = useState<Task | null>(null);
@@ -618,7 +619,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, arch
                         </div>
                         <div className="text-right relative z-10 bg-black/40 p-3 rounded-2xl border border-white/10 backdrop-blur-xl">
                            <div className="text-[10px] font-black text-amber-500/80 tracking-widest mb-1">YOUR RANK</div>
-                           <div className="text-3xl font-black text-white italic tracking-tighter">#1</div>
+                           <div className="text-3xl font-black text-white italic tracking-tighter">#{userRank}</div>
                         </div>
                       </motion.div>
                     )}

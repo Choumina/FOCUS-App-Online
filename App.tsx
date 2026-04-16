@@ -39,9 +39,20 @@ const App: React.FC = () => {
   const [isTourVisible, setIsTourVisible] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [userRank, setUserRank] = useState<number | string>('...');
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
+
+  // Commercial / Premium Status
+  const [isPremium, setIsPremium] = useState<boolean>(() => {
+    const saved = localStorage.getItem('focus_app_is_premium');
+    return saved === 'true';
+  });
+  const [hasViewedAnalysis, setHasViewedAnalysis] = useState<boolean>(() => {
+    const saved = localStorage.getItem('focus_app_viewed_analysis');
+    return saved === 'true';
+  });
 
   // Persistence initialization
   const [coins, _setCoins] = useState(0);
@@ -98,6 +109,14 @@ const App: React.FC = () => {
   const lastFetchedUserId = React.useRef<string | null>(null);
 
   // Auth & Data Fetching
+  useEffect(() => {
+    localStorage.setItem('focus_app_is_premium', isPremium.toString());
+  }, [isPremium]);
+
+  useEffect(() => {
+    localStorage.setItem('focus_app_viewed_analysis', hasViewedAnalysis.toString());
+  }, [hasViewedAnalysis]);
+
   useEffect(() => {
     const checkSessionAndFetch = (sessionUser: User | null) => {
       if (sessionUser) {
@@ -157,7 +176,31 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Set tour visible after onboarding is cleared and user is on Home page
+  const fetchUserRank = async (userId: string) => {
+    try {
+      const { data: myData } = await supabase.from('users').select('points').eq('id', userId).single();
+      if (!myData) return;
+      const myPoints = myData.points || 0;
+      const { count, error } = await supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .gt('points', myPoints);
+      if (!error && count !== null) {
+        setUserRank(count + 1);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user rank:', err);
+    }
+  };
+
+  const saveSubSections = (updater: React.SetStateAction<Record<string, string[]>>) => {
+    setVisibleSubSections(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      // Sync it immediately in the state but also it will be picked up by the sync useEffect
+      return next;
+    });
+  };
+
   useEffect(() => {
     // Only trigger if important conditions change
     const canShow =
@@ -241,19 +284,12 @@ const App: React.FC = () => {
         if (onboardingDone && !data.has_completed_onboarding) {
           supabase.from('users').update({ has_completed_onboarding: true, updated_at: new Date().toISOString() }).eq('id', authUser.id).then(() => { });
         }
-        if (tourDone && !data.has_completed_tour) {
-          supabase.from('users').update({ has_completed_tour: true, updated_at: new Date().toISOString() }).eq('id', authUser.id).then(() => { });
-        }
-
 
         if (data.points !== undefined) _setCoins(data.points);
         if (data.tasks) setTasks(data.tasks);
-        if (data.home_config) setHomeSections(data.home_config);
-        if (data.placed_items) setPlacedItems(data.placed_items);
-        if (storedMeta._visibleSubSections) setVisibleSubSections(storedMeta._visibleSubSections);
-        if (storedMeta._appSettings) setAppSettings(storedMeta._appSettings);
-        if (data.focus_logs) setFocusLogs(data.focus_logs);
-        else if (storedMeta._focusLogs) setFocusLogs(storedMeta._focusLogs);
+        
+        // Fetch rank
+        fetchUserRank(authUser.id);
 
         // ── 個人資料同步 ─────────────────────────────────────────────────
         const storedProfile = data.user_profile || {};
@@ -657,20 +693,19 @@ const App: React.FC = () => {
         return <HomeView
           navigateTo={navigateTo}
           tasks={tasks}
-          setTasks={setTasks}
           toggleTask={toggleTask}
           archiveTask={archiveTask}
           calendarEvents={calendarEvents}
           sections={homeSections}
           setSections={setHomeSections}
-          visibleSubSections={visibleSubSections}
-          setVisibleSubSections={setVisibleSubSections}
           userProfile={userProfile}
           focusLogs={focusLogs}
           activeSessionSeconds={timerIsActive ? (timerTotalTime - timerTimeLeft) : 0}
           isTourVisible={isTourVisible}
           timerTimeLeft={timerTimeLeft}
-          timerTotalTime={timerTotalTime}
+          visibleSubSections={visibleSubSections}
+          setVisibleSubSections={saveSubSections}
+          userRank={userRank}
         />;
       case AppRoute.FOCUS_TIMER:
         return <FocusTimerView
@@ -718,18 +753,27 @@ const App: React.FC = () => {
           lastBetAmount={lastBetAmount}
           setLastBetAmount={setLastBetAmount}
           setUserProfile={setUserProfile}
+          isPremium={isPremium}
         />;
       case AppRoute.LEADERBOARD:
-        return <LeaderboardView navigateTo={navigateTo} userProfile={userProfile} coins={coins} focusLogs={focusLogs} placedItems={placedItems} />;
+        return <LeaderboardView navigateTo={navigateTo} userProfile={userProfile} coins={coins} setCoins={setCoins} focusLogs={focusLogs} placedItems={placedItems} />;
       case AppRoute.SETTINGS:
         return <SettingsView 
           navigateTo={navigateTo} 
           onResetTour={handleResetTour}
           appSettings={appSettings}
           setAppSettings={setAppSettings}
+          isPremium={isPremium}
+          setIsPremium={setIsPremium}
         />;
       case AppRoute.AI_CHAT:
-        return <AIChatView navigateTo={navigateTo} setCalendarEvents={setCalendarEvents} tasks={tasks} />;
+        return <AIChatView 
+          navigateTo={navigateTo} 
+          setCalendarEvents={setCalendarEvents} 
+          tasks={tasks} 
+          isPremium={isPremium} 
+          userIdentity={userProfile.identity}
+        />;
       case AppRoute.CALENDAR_DETAIL:
         return <CalendarDetailView
           navigateTo={navigateTo}
@@ -755,6 +799,9 @@ const App: React.FC = () => {
           navigateTo={navigateTo} 
           focusLogs={focusLogs} 
           activeSessionSeconds={timerIsActive ? (timerTotalTime - timerTimeLeft) : 0}
+          isPremium={isPremium}
+          hasViewedAnalysis={hasViewedAnalysis}
+          setHasViewedAnalysis={setHasViewedAnalysis}
         />;
       case AppRoute.CALENDAR_ADMIN:
         return <CalendarAdminView navigateTo={navigateTo} events={calendarEvents} setEvents={setCalendarEvents} />;
@@ -776,6 +823,7 @@ const App: React.FC = () => {
           isTourVisible={isTourVisible}
           timerTimeLeft={timerTimeLeft}
           timerTotalTime={timerTotalTime}
+          userRank={userRank}
         />;
     }
   };

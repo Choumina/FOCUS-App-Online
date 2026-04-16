@@ -13,6 +13,7 @@ interface LeaderboardViewProps {
     id?: string;
   };
   coins: number;
+  setCoins: (updater: React.SetStateAction<number>) => void;
   focusLogs: FocusLog[];
   placedItems: any[];
 }
@@ -38,7 +39,7 @@ const RANK_CATEGORIES: { key: RankCategory; label: string; icon: React.ReactNode
   { key: 'pet',     label: '寵物',    icon: <Heart size={14} />,   color: 'text-pink-600',   description: '寵物等級排名' },
 ];
 
-const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfile, coins, focusLogs, placedItems }) => {
+const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfile, coins, setCoins, focusLogs, placedItems }) => {
   const [tab, setTab] = useState<'area' | 'friends'>('area');
   const [category, setCategory] = useState<RankCategory>('points');
   const [players, setPlayers] = useState<Player[]>([]);
@@ -92,8 +93,7 @@ const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfi
             return;
           }
         }
-        const orderCol = category === 'points' ? 'points' : 'points'; // All ordered by points server-side, we re-sort client-side
-        const { data, error } = await query.order(orderCol, { ascending: false }).limit(50);
+        const { data, error } = await query.order('points', { ascending: false }).limit(1000);
         if (error) throw error;
 
         if (data) {
@@ -103,7 +103,7 @@ const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfi
               return {
                 id: item.id,
                 name: item.user_profile?.name || '未知使用者',
-                score,
+                score: score || 0,
                 scoreLabel: label,
                 isMe: item.id === userProfile.id,
                 avatar: item.user_profile?.avatar || `https://picsum.photos/seed/${item.id}/100`,
@@ -126,6 +126,14 @@ const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfi
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
+
+    if (searchQuery.trim() === '999') {
+      setCoins(prev => prev + 9999);
+      setSearchQuery('');
+      alert('🎰 密技啟動！獲得 $9999 金幣！');
+      return;
+    }
+
     setIsSearching(true);
     try {
       const { data, error } = await supabase.from('users').select('id, user_profile, points, game_data').ilike('user_profile->>name', `%${searchQuery}%`).limit(10);

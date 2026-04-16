@@ -15,9 +15,11 @@ interface SettingsViewProps {
     appBlockerBreak: boolean;
   };
   setAppSettings: React.Dispatch<React.SetStateAction<any>>;
+  isPremium: boolean;
+  setIsPremium: (val: boolean) => void;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, appSettings, setAppSettings }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, appSettings, setAppSettings, isPremium, setIsPremium }) => {
   const [tab, setTab] = useState<'notif' | 'block'>('notif');
   const [tourReset, setTourReset] = useState(false);
 
@@ -162,7 +164,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
                 <button
                   onClick={handleResetTour}
                   disabled={tourReset}
-                  className="w-full flex items-center justify-between bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all disabled:opacity-60"
+                  className="w-full flex items-center justify-between bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all disabled:opacity-60 mb-4"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-2xl bg-indigo-50 flex items-center justify-center">
@@ -177,6 +179,41 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
                   </div>
                   <ChevronRight size={18} className="text-gray-300" />
                 </button>
+              </div>
+
+              {/* 方案管理 */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">方案管理</h3>
+                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                   <div className="flex items-start justify-between mb-6">
+                      <div>
+                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">目前方案</p>
+                         <h4 className={`text-xl font-black ${isPremium ? 'text-indigo-600' : 'text-gray-800'}`}>
+                           {isPremium ? 'Premium 尊享版' : 'Regular 普通版'}
+                         </h4>
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${isPremium ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
+                         {isPremium ? 'ACTIVE' : 'FREE'}
+                      </div>
+                   </div>
+                   
+                   <p className="text-xs text-gray-400 font-medium leading-relaxed mb-6">
+                      {isPremium 
+                        ? '您目前享有無限次數據分析、無廣告 AI 助理與極速連線體驗。' 
+                        : '普通版使用者僅能查看一次數據分析報告，且包含 AI 廣告。'}
+                   </p>
+
+                   <button
+                     onClick={() => setIsPremium(!isPremium)}
+                     className={`w-full py-4 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-lg ${
+                       isPremium 
+                       ? 'bg-gray-100 text-gray-600' 
+                       : 'bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-indigo-100'
+                     }`}
+                   >
+                     {isPremium ? '切換回普通版' : '立即升級為 Premium'}
+                   </button>
+                </div>
               </div>
             </>
           ) : (

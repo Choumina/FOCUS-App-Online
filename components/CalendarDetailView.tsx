@@ -455,32 +455,47 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
               const today = new Date();
               const isCurrentMonth = today.getMonth() + 1 === currentMonth && today.getFullYear() === currentYear;
 
-              return days.map((d, i) => (
-                <div 
-                  key={i}
-                  onClick={() => {
-                    if (d) {
-                      setSelectedDate(d);
-                      setViewMode('day');
-                    }
-                  }}
-                  className={`aspect-square flex flex-col items-center justify-center rounded-2xl transition-all cursor-pointer relative
-                    ${d === selectedDate ? 'bg-red-500 text-white shadow-lg scale-105 z-10' : d ? 'hover:bg-gray-100 text-gray-800' : ''}
-                    ${isCurrentMonth && d === today.getDate() && d !== selectedDate ? 'border-2 border-red-200' : ''}
-                  `}
-                >
-                  {d && (
-                    <>
-                      <span className="text-sm font-bold">{d}</span>
-                      <div className="flex gap-0.5 mt-1">
-                        {events.filter(e => e.date === `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`).slice(0, 3).map((e, idx) => (
-                          <div key={idx} className={`w-1 h-1 rounded-full ${d === selectedDate ? 'bg-white/60' : (e.color?.replace('bg-', 'bg-').replace('-200', '-400') || 'bg-red-400')}`} />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ));
+              return days.map((d, i) => {
+                const dateStr = d ? `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}` : '';
+                const dayEvents = events.filter(e => e.date === dateStr);
+                
+                // Determine highlight color based on event type
+                let highlightColor = '';
+                if (dayEvents.some(e => e.title.includes('考試') || e.title.includes('考'))) {
+                  highlightColor = 'bg-red-50 ring-1 ring-red-100';
+                } else if (dayEvents.some(e => e.title.includes('假'))) {
+                  highlightColor = 'bg-green-50 ring-1 ring-green-100';
+                } else if (dayEvents.some(e => e.title.includes('📂'))) {
+                  highlightColor = 'bg-purple-50 ring-1 ring-purple-100';
+                }
+                
+                return (
+                  <div 
+                    key={i}
+                    onClick={() => {
+                      if (d) {
+                        setSelectedDate(d);
+                        setViewMode('day');
+                      }
+                    }}
+                    className={`aspect-square flex flex-col items-center justify-center rounded-2xl transition-all cursor-pointer relative
+                      ${d === selectedDate ? 'bg-red-500 text-white shadow-lg scale-105 z-10' : d ? (highlightColor || 'hover:bg-gray-100 text-gray-800') : ''}
+                      ${isCurrentMonth && d === today.getDate() && d !== selectedDate ? 'border-2 border-red-200' : ''}
+                    `}
+                  >
+                    {d && (
+                      <>
+                        <span className={`text-sm font-bold ${dayEvents.length > 0 && d !== selectedDate ? 'text-gray-900' : ''}`}>{d}</span>
+                        <div className="flex gap-1 mt-1">
+                          {dayEvents.slice(0, 3).map((e, idx) => (
+                            <div key={idx} className={`w-1.5 h-1.5 rounded-full ${d === selectedDate ? 'bg-white/80' : (e.color?.replace('bg-', 'bg-').replace('-200', '-500') || 'bg-red-500')}`} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              });
             })()}
           </div>
           

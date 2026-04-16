@@ -11,11 +11,12 @@ interface RaceTrackViewProps {
   lastBetAmount: number;
   setLastBetAmount: React.Dispatch<React.SetStateAction<number>>;
   setUserProfile: React.Dispatch<React.SetStateAction<any>>;
+  isPremium: boolean;
 }
 
 const TICKET_COST = 500;
 
-const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoins, lastBetAmount, setLastBetAmount, setUserProfile }) => {
+const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoins, lastBetAmount, setLastBetAmount, setUserProfile, isPremium }) => {
   React.useEffect(() => {
     const resetScroll = () => {
       window.scrollTo(0, 0);
@@ -33,6 +34,8 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
   const [bet, setBet] = useState(lastBetAmount);
   const [selectedHorse, setSelectedHorse] = useState(-1);
   const [resultStatus, setResultStatus] = useState<'win' | 'lose' | null>(null);
+  const [showAdOverlay, setShowAdOverlay] = useState(false);
+  const [adCountdown, setAdCountdown] = useState(5);
   const [gameCode, setGameCode] = useState('');
 
   const buyTicket = () => {
@@ -60,6 +63,20 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
     }
   };
 
+  // Ad Countdown Logic
+  useEffect(() => {
+    let timer: any;
+    if (showAdOverlay && adCountdown > 0) {
+      timer = setInterval(() => {
+        setAdCountdown(prev => prev - 1);
+      }, 1000);
+    } else if (showAdOverlay && adCountdown === 0) {
+      setShowAdOverlay(false);
+      navigateTo(AppRoute.HOME);
+    }
+    return () => clearInterval(timer);
+  }, [showAdOverlay, adCountdown, navigateTo]);
+
   useEffect(() => {
     let interval: any = null;
     if (racing) {
@@ -81,14 +98,22 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
             }
             // Ticket consumed after each race
             setHasTicket(false);
-            setTimeout(() => setResultStatus(null), 2500);
+            setTimeout(() => {
+              if (isPremium) {
+                setResultStatus(null);
+                navigateTo(AppRoute.HOME);
+              } else {
+                setResultStatus(null);
+                setShowAdOverlay(true);
+              }
+            }, 2500);
           }
           return next;
         });
       }, 100);
     }
     return () => clearInterval(interval);
-  }, [racing, bet, setCoins, selectedHorse]);
+  }, [racing, bet, setCoins, selectedHorse, isPremium, navigateTo, setUserProfile]);
 
   const startRace = () => {
     if (selectedHorse === -1) return alert('請先選擇一匹馬進行下注！');
@@ -344,6 +369,52 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Ad Overlay */}
+      {showAdOverlay && (
+        <div className="fixed inset-0 bg-black z-[200] flex flex-col items-center justify-center text-center p-8">
+          <div className="max-w-md w-full">
+            <div className="relative mb-12">
+               <div className="w-24 h-24 bg-white/10 rounded-[2.5rem] flex items-center justify-center mx-auto animate-pulse">
+                  <Sparkles size={48} className="text-yellow-400" />
+               </div>
+               <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                  Ad Break
+               </div>
+            </div>
+            
+            <h3 className="text-3xl font-black text-white mb-4">Focus AI Premium</h3>
+            <p className="text-white/60 text-base font-medium leading-relaxed mb-12">
+              您正在觀看普通版廣告。<br />
+              升級為 **Premium 尊享版** 即可永久跳過所有廣告，並解鎖完整專注數據報告！
+            </p>
+            
+            <div className="flex flex-col items-center gap-6">
+               <div className="relative w-20 h-20 flex items-center justify-center">
+                  <svg className="absolute inset-0 w-full h-full -rotate-90">
+                     <circle cx="40" cy="40" r="36" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
+                     <circle 
+                        cx="40" 
+                        cy="40" 
+                        r="36" 
+                        fill="none" 
+                        stroke="#4f46e5" 
+                        strokeWidth="4" 
+                        strokeDasharray="226.2"
+                        strokeDashoffset={226.2 * (1 - adCountdown / 5)}
+                        className="transition-all duration-[1100ms] linear"
+                     />
+                  </svg>
+                  <span className="text-2xl font-black text-white">{adCountdown}</span>
+               </div>
+               
+               <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">
+                  跳過廣告倒數中...
+               </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

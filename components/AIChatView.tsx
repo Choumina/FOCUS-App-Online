@@ -189,24 +189,28 @@ const AIChatView: React.FC<{
   navigateTo: (route: AppRoute) => void;
   setCalendarEvents?: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
   tasks?: Task[];
-}> = ({ navigateTo, setCalendarEvents, tasks = [] }) => {
+  isPremium: boolean;
+  userIdentity?: string;
+}> = ({ navigateTo, setCalendarEvents, tasks = [], isPremium, userIdentity }) => {
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
       const saved = localStorage.getItem('focus_ai_conversations');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {
       console.error("Failed to load AI conversations", e);
     }
-    return [];
+    return [{
+      id: 'default',
+      title: 'FOCUS AI 對話',
+      messages: [],
+      updatedAt: Date.now()
+    }];
   });
   
-  const [currentConvId, setCurrentConvId] = useState<string | null>(() => {
-    const saved = localStorage.getItem('focus_ai_current_conv_id');
-    return saved || null;
-  });
+  const [currentConvId, setCurrentConvId] = useState<string>('default');
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -220,8 +224,11 @@ const AIChatView: React.FC<{
   // Form states
   const [scheduleForm, setScheduleForm] = useState({
     wakeTime: '',
-    sleepDuration: '',
+    sleepTime: '',
+    sleepNeeded: '',
     commuteTime: '',
+    departureTime: '',
+    returnTime: '',
     goals: ''
   });
   
@@ -238,9 +245,6 @@ const AIChatView: React.FC<{
     tasks: []
   });
   
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deletingConvId, setDeletingConvId] = useState<string | null>(null);
-
   const lastEnterTime = useRef<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -262,34 +266,10 @@ const AIChatView: React.FC<{
   }, [messages, isTyping]);
 
   const updateMessages = (newMessages: Message[] | ((prev: Message[]) => Message[])) => {
-    if (!currentConvId) {
-      // Create new conversation if none exists
-      const newId = Date.now().toString();
-      const initialMsgs = typeof newMessages === 'function' ? newMessages([]) : newMessages;
-      const firstMsgText = initialMsgs[0]?.text || '新對話';
-      const newConv: Conversation = {
-        id: newId,
-        title: firstMsgText.slice(0, 15) + (firstMsgText.length > 15 ? '...' : ''),
-        messages: initialMsgs,
-        updatedAt: Date.now()
-      };
-      setConversations(prev => [newConv, ...prev]);
-      setCurrentConvId(newId);
-      return;
-    }
-
     setConversations(prev => prev.map(c => {
-      if (c.id === currentConvId) {
+      if (c.id === 'default') {
         const msgs = typeof newMessages === 'function' ? newMessages(c.messages) : newMessages;
-        let newTitle = c.title;
-        // If it was "新對話" or empty, update title based on first user message
-        if ((c.title === '新對話' || c.messages.length === 0) && msgs.length > 0) {
-          const firstUserMsg = msgs.find(m => m.role === 'user');
-          if (firstUserMsg) {
-            newTitle = firstUserMsg.text.slice(0, 15) + (firstUserMsg.text.length > 15 ? '...' : '');
-          }
-        }
-        return { ...c, messages: msgs, updatedAt: Date.now(), title: newTitle };
+        return { ...c, messages: msgs, updatedAt: Date.now() };
       }
       return c;
     }));
@@ -378,7 +358,16 @@ const AIChatView: React.FC<{
     }
 
     const response = await chatWithAssistant(msgToSend, messages);
-    updateMessages(prev => [...prev, { role: 'bot', text: response.text }]);
+    let botText = response.text;
+    
+    // Check for high school portfolio link
+    if (userIdentity === 'high_school' && (msgToSend.includes('學習歷程') || botText.includes('學習歷程'))) {
+      if (!botText.includes('shs.k12ea.gov.tw')) {
+        botText += '\n\n💡 相關連結：妳可以參考 [教育部學習歷程檔案數位學習課程](https://shs.k12ea.gov.tw/public/12basic/e-portfolio/index.html) 獲得更多細節。';
+      }
+    }
+
+    updateMessages(prev => [...prev, { role: 'bot', text: botText }]);
     
     if (response.events && response.events.length > 0 && setCalendarEvents) {
       setCalendarEvents(prev => {
@@ -416,17 +405,17 @@ const AIChatView: React.FC<{
     
     let prompt = '';
     if (type === 'schedule') {
-      prompt = `使用者提供了日常行程資料：\n1. 起床時間：${scheduleForm.wakeTime}\n2. 睡眠需求：${scheduleForm.sleepDuration}\n3. 通勤時間：${scheduleForm.commuteTime}\n4. 想完成的事：${scheduleForm.goals}\n\n請分析並安排行程，並以「行程安排：[內容]」的格式回覆。`;
+      prompt = `使用者提供了日常行程資料：\n1. 起床時間：${scheduleForm.wakeTime}\n2. 睡覺時間：${scheduleForm.sleepTime}\n3. 睡眠時長需求：${scheduleForm.sleepNeeded}\n4. 平日通勤時間：${scheduleForm.commuteTime}\n5. 出門時間：${scheduleForm.departureTime}\n6. 到家時間：${scheduleForm.returnTime}\n7. 額外目標：${scheduleForm.goals}\n\n請分析此行程並給予具體的生活建議與進度安排。回覆應包含對睡眠充足度與通勤壓力的點評。`;
       updateMessages(prev => prev.map((m, idx) => 
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     } else if (type === 'task') {
-      prompt = `使用者提供了學習任務資料：\n1. 任務名稱：${taskForm.taskName}\n2. 呈現形式：${taskForm.format}\n3. 開始時間：${taskForm.startTime}\n4. 結束時間：${taskForm.endTime}\n\n請拆解此任務，並以「任務拆解：[內容]」的格式回覆。`;
+      prompt = `使用者提供了學習任務資料：\n1. 拆解任務：${taskForm.taskName}\n2. 呈現形式：${taskForm.format}\n3. 開始執行時間：${taskForm.startTime}\n4. 結束執行時間：${taskForm.endTime}\n\n請根據要求的格式與時間窗口，將此任務拆解為可執行的步驟，並安排進入行程。`;
       updateMessages(prev => prev.map((m, idx) => 
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     } else if (type === 'matrix') {
-      prompt = `使用者提供了任務重要性與緊急度評分（1-5）：\n${matrixForm.tasks.map(t => `- ${t.title}: 重要性 ${t.importance}, 緊急度 ${t.urgency}`).join('\n')}\n\n請根據這些評分進行艾森豪矩陣分析，並在 matrixData 欄位中回傳這些資料。`;
+      prompt = `使用者提供了任務重要性與緊急度評分（1-5）：\n${matrixForm.tasks.map(t => `- ${t.title}: 重要性 ${t.importance}, 緊急度 ${t.urgency}`).join('\n')}\n\n請進行艾森豪矩陣分析並給予執行建議。`;
       updateMessages(prev => prev.map((m, idx) => 
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
@@ -471,7 +460,7 @@ const AIChatView: React.FC<{
 
     // Clear forms
     if (type === 'schedule') {
-      setScheduleForm({ wakeTime: '', sleepDuration: '', commuteTime: '', goals: '' });
+      setScheduleForm({ wakeTime: '', sleepTime: '', sleepNeeded: '', commuteTime: '', departureTime: '', returnTime: '', goals: '' });
     } else if (type === 'task') {
       setTaskForm({ taskName: '', format: '', startTime: '', endTime: '' });
     } else {
@@ -498,20 +487,14 @@ const AIChatView: React.FC<{
       const timeDiff = now - lastEnterTime.current;
 
       if (timeDiff < 500) {
-        // 500ms 內按第二次，發送
         handleSend();
         lastEnterTime.current = 0;
       } else {
-        // 第一次按 Enter，顯示提示
         lastEnterTime.current = now;
         setShowEnterHint(true);
-        // 500ms 後自動隱藏提示
-        setTimeout(() => {
-          setShowEnterHint(false);
-        }, 500);
+        setTimeout(() => setShowEnterHint(false), 500);
       }
     } else {
-      // 按其他鍵重置計數
       lastEnterTime.current = 0;
       setShowEnterHint(false);
     }
@@ -523,130 +506,27 @@ const AIChatView: React.FC<{
 
   return (
     <div className="flex h-[100dvh] bg-white relative overflow-hidden font-sans">
-      <ConfirmationModal
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={confirmDeleteChat}
-        title="刪除對話紀錄？"
-        message="確定要刪除這筆對話紀錄嗎？此操作無法復原。"
-        confirmText="刪除"
-        type="danger"
-      />
-      {/* Sidebar Overlay for Mobile */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] md:hidden"
-            onClick={() => setIsSidebarOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 w-72 bg-[#F8F9FA] border-r border-gray-200 z-[70] transform transition-all duration-300 ease-in-out flex flex-col ${isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} md:relative md:translate-x-0 ${!isSidebarOpen && 'md:w-0 md:opacity-0 md:overflow-hidden'}`}>
-        <div className="p-4 flex items-center justify-between">
-          <button 
-            onClick={handleNewChat}
-            className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-700 py-3.5 px-4 rounded-2xl font-bold text-sm shadow-sm hover:bg-gray-50 active:scale-95 transition-all"
-          >
-            <Plus size={18} className="text-blue-500" />
-            新對話
-          </button>
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="md:hidden p-3 text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-2 py-4 space-y-1 custom-scrollbar">
-          <div className="px-3 py-2 text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-between">
-            <span>最近的歷史紀錄</span>
-            <RotateCcw size={10} className="opacity-50" />
-          </div>
-          
-          {conversations.length === 0 ? (
-            <div className="px-4 py-8 text-center">
-              <p className="text-xs text-gray-400 font-medium italic">目前沒有對話紀錄</p>
-            </div>
-          ) : (
-            conversations.map(conv => (
-              <div 
-                key={conv.id}
-                onClick={() => {
-                  setCurrentConvId(conv.id);
-                  setIsSidebarOpen(false);
-                }}
-                className={`group flex items-center justify-between p-3.5 rounded-xl cursor-pointer transition-all ${currentConvId === conv.id ? 'bg-[#E8F0FE] text-[#1967D2]' : 'text-gray-600 hover:bg-gray-200'}`}
-              >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <Sparkles size={14} className={currentConvId === conv.id ? 'text-blue-500' : 'text-gray-400'} />
-                  <span className="text-xs font-bold truncate pr-2">{conv.title}</span>
-                </div>
-                <button 
-                  onClick={(e) => handleDeleteChat(conv.id, e)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="p-4 border-t border-gray-200 bg-gray-50/50">
-           <button 
-             onClick={() => navigateTo(AppRoute.SETTINGS)}
-             className="w-full flex items-center gap-3 p-3 text-gray-600 hover:bg-gray-200 rounded-xl transition-all active:scale-95"
-           >
-             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-black text-xs">U</div>
-             <div className="flex-1 text-left">
-               <div className="text-xs font-bold">設定相關</div>
-               <div className="text-[10px] text-gray-400">偏好設定與帳號</div>
-             </div>
-           </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 bg-white relative">
         <header className="px-4 h-16 flex items-center justify-between border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2.5 text-gray-500 hover:bg-gray-100 rounded-xl transition-colors"
-              title={isSidebarOpen ? "收起側欄" : "展開側欄"}
-            >
-              <Maximize2 size={20} className={isSidebarOpen ? "rotate-45" : ""} />
-            </button>
-            <div className="flex items-center gap-2">
-                <Sparkles className="text-blue-500" size={18} />
-                <h1 className="text-sm font-bold text-gray-800 tracking-tight truncate max-w-[150px]">
-                  {currentConversation?.title || 'FOCUS AI'}
-                </h1>
-            </div>
+             <button onClick={() => navigateTo(AppRoute.HOME)} className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
+               <Home size={22} />
+             </button>
+             <div>
+                <h1 className="text-lg font-black text-gray-800 tracking-tight">FOCUS AI</h1>
+                <div className="flex items-center gap-1.5">
+                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Always Persistent</p>
+                </div>
+             </div>
           </div>
-          
-          <div className="flex items-center gap-1">
-            <button 
-              onClick={handleNewChat}
-              className="p-2.5 text-gray-400 hover:text-blue-500 transition-colors hidden md:flex"
-              title="新對話"
-            >
-              <Plus size={20} />
-            </button>
-            <button 
-              onClick={() => navigateTo(AppRoute.HOME)}
-              className="p-2.5 text-gray-600 hover:bg-gray-100 rounded-xl transition-all active:scale-90"
-              title="返回首頁"
-            >
-              <Home size={20} />
-            </button>
-          </div>
+          <button 
+             onClick={() => updateMessages([])}
+             className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+             title="清空對話紀錄"
+          >
+            <RotateCcw size={18} />
+          </button>
         </header>
 
         {/* Chat Messages */}
@@ -744,16 +624,28 @@ const AIChatView: React.FC<{
 
                         {m.role === 'bot' && m.type === 'form_schedule' && !m.isSubmitted && (
                           <div className="mt-6 space-y-3">
-                            <input type="text" placeholder="起床時間" className="w-full p-3 bg-gray-50 rounded-xl text-sm border-none shadow-inner" value={scheduleForm.wakeTime} onChange={e => setScheduleForm({...scheduleForm, wakeTime: e.target.value})} />
-                            <textarea placeholder="你想完成的事" className="w-full p-3 bg-gray-50 rounded-xl text-sm border-none shadow-inner min-h-[60px]" value={scheduleForm.goals} onChange={e => setScheduleForm({...scheduleForm, goals: e.target.value})} />
-                            <button onClick={() => handleFormSubmit('schedule')} className="w-full py-3 bg-blue-500 text-white rounded-2xl text-sm font-black">建議行程</button>
+                            <div className="grid grid-cols-2 gap-2">
+                                <input type="text" placeholder="起床時間 (如 07:00)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.wakeTime} onChange={e => setScheduleForm({...scheduleForm, wakeTime: e.target.value})} />
+                                <input type="text" placeholder="睡覺時間 (如 23:00)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.sleepTime} onChange={e => setScheduleForm({...scheduleForm, sleepTime: e.target.value})} />
+                                <input type="text" placeholder="睡眠時長需求 (小時)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.sleepNeeded} onChange={e => setScheduleForm({...scheduleForm, sleepNeeded: e.target.value})} />
+                                <input type="text" placeholder="平日通勤時間 (分)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.commuteTime} onChange={e => setScheduleForm({...scheduleForm, commuteTime: e.target.value})} />
+                                <input type="text" placeholder="出門時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.departureTime} onChange={e => setScheduleForm({...scheduleForm, departureTime: e.target.value})} />
+                                <input type="text" placeholder="到家時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.returnTime} onChange={e => setScheduleForm({...scheduleForm, returnTime: e.target.value})} />
+                            </div>
+                            <textarea placeholder="你想額外完成的事 (選填)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner min-h-[60px]" value={scheduleForm.goals} onChange={e => setScheduleForm({...scheduleForm, goals: e.target.value})} />
+                            <button onClick={() => handleFormSubmit('schedule')} className="w-full py-3 bg-blue-500 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-100">分析日常行程 & 給予建議</button>
                           </div>
                         )}
 
                         {m.role === 'bot' && m.type === 'form_task' && !m.isSubmitted && (
                           <div className="mt-6 space-y-3">
-                            <input type="text" placeholder="任務名稱" className="w-full p-3 bg-gray-50 rounded-xl text-sm border-none shadow-inner" value={taskForm.taskName} onChange={e => setTaskForm({...taskForm, taskName: e.target.value})} />
-                            <button onClick={() => handleFormSubmit('task')} className="w-full py-3 bg-indigo-500 text-white rounded-2xl text-sm font-black">拆解步驟</button>
+                            <input type="text" placeholder="想拆解的任務名稱" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.taskName} onChange={e => setTaskForm({...taskForm, taskName: e.target.value})} />
+                            <input type="text" placeholder="呈現在行事曆的形式 (如: 讀書、實作)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.format} onChange={e => setTaskForm({...taskForm, format: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-2">
+                                <input type="text" placeholder="開始執行時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.startTime} onChange={e => setTaskForm({...taskForm, startTime: e.target.value})} />
+                                <input type="text" placeholder="結束執行時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.endTime} onChange={e => setTaskForm({...taskForm, endTime: e.target.value})} />
+                            </div>
+                            <button onClick={() => handleFormSubmit('task')} className="w-full py-3 bg-indigo-500 text-white rounded-2xl text-xs font-black shadow-lg shadow-indigo-100">拆解任務並排入行程</button>
                           </div>
                         )}
                       </div>
@@ -776,6 +668,27 @@ const AIChatView: React.FC<{
                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-150"></span>
                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-300"></span>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Ad Banner for Regular Users */}
+              {!isPremium && (
+                <div className="pt-10">
+                  <div 
+                    onClick={() => navigateTo(AppRoute.SETTINGS)}
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 rounded-[2rem] text-white shadow-xl shadow-blue-100/50 flex items-center justify-between cursor-pointer group hover:scale-[1.02] transition-all"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center">
+                        <Zap size={24} fill="white" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black uppercase tracking-widest mb-1">Focus AI Premium</h4>
+                        <p className="text-[10px] opacity-80 font-bold">升級享有無限制 AI 任務拆解與極速連線</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
               )}

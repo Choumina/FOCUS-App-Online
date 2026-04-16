@@ -11,9 +11,19 @@ interface FocusAnalysisViewProps {
   navigateTo: (route: AppRoute) => void;
   focusLogs: FocusLog[];
   activeSessionSeconds?: number;
+  isPremium: boolean;
+  hasViewedAnalysis: boolean;
+  setHasViewedAnalysis: (val: boolean) => void;
 }
 
-const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focusLogs, activeSessionSeconds = 0 }) => {
+const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ 
+  navigateTo, 
+  focusLogs, 
+  activeSessionSeconds = 0,
+  isPremium,
+  hasViewedAnalysis,
+  setHasViewedAnalysis
+}) => {
   const [timeScale, setTimeScale] = useState<'day' | 'week' | 'month'>('day');
 
   // Convert active seconds to minutes for the chart
@@ -167,9 +177,42 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
   }, [totalMinutes, focusLogs.length, activeMinutes]);
   const totalInterruption = useMemo(() => focusLogs.reduce((acc, log) => acc + log.interruptionCount, 0), [focusLogs]);
 
+  React.useEffect(() => {
+    // If regular user visits, mark as viewed so next time IT WILL BE LOCKED
+    if (!isPremium && !hasViewedAnalysis) {
+      setHasViewedAnalysis(true);
+    }
+  }, [isPremium, hasViewedAnalysis, setHasViewedAnalysis]);
+
   return (
-    <div className="bg-white min-h-screen pb-20 font-sans">
+    <div className="bg-white min-h-screen pb-20 font-sans relative">
       <ViewHeader title="專注數據報告" onBack={() => navigateTo(AppRoute.HOME)} />
+
+      {/* Lock Overlay for Non-Premium who already viewed once */}
+      {!isPremium && hasViewedAnalysis && (
+        <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-md flex flex-col items-center justify-center p-8 text-center mt-16">
+           <div className="w-20 h-20 bg-indigo-50 rounded-[2rem] flex items-center justify-center text-indigo-500 mb-6 shadow-xl shadow-indigo-100/50">
+              <Zap size={40} fill="currentColor" />
+           </div>
+           <h3 className="text-2xl font-black text-gray-800 mb-3">限時試用已結束</h3>
+           <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8 max-w-xs">
+              普通版使用者僅能查看一次數據報告。
+              升級為 **Premium 尊享版** 以解鎖無限次數據分析、分心阻斷建議與無廣告體驗！
+           </p>
+           <button 
+             onClick={() => navigateTo(AppRoute.SETTINGS)}
+             className="w-full max-w-xs py-4 bg-gray-900 text-white rounded-2xl font-bold shadow-2xl active:scale-95 transition-all"
+           >
+              立即升級方案
+           </button>
+           <button 
+             onClick={() => navigateTo(AppRoute.HOME)}
+             className="mt-4 text-gray-400 text-xs font-bold hover:text-gray-600"
+           >
+              返回首頁
+           </button>
+        </div>
+      )}
 
       <div className="p-6 max-w-2xl mx-auto space-y-8">
         {/* Time Scale Switcher */}
