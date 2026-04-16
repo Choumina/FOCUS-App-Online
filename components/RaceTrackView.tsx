@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, Play, QrCode, Zap, Flag, Coins, Star, Target } from 'lucide-react';
+import { ChevronLeft, Play, Zap, Flag, Coins, Star, Ticket, QrCode, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface RaceTrackViewProps {
@@ -13,42 +13,49 @@ interface RaceTrackViewProps {
   setUserProfile: React.Dispatch<React.SetStateAction<any>>;
 }
 
+const TICKET_COST = 500;
+
 const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoins, lastBetAmount, setLastBetAmount, setUserProfile }) => {
   React.useEffect(() => {
     const resetScroll = () => {
       window.scrollTo(0, 0);
       const mainElement = document.querySelector('main');
-      if (mainElement) {
-        mainElement.scrollTop = 0;
-      }
+      if (mainElement) { mainElement.scrollTop = 0; }
     };
     resetScroll();
     requestAnimationFrame(resetScroll);
     setTimeout(resetScroll, 50);
   }, []);
 
+  const [hasTicket, setHasTicket] = useState(false);
   const [racing, setRacing] = useState(false);
   const [positions, setPositions] = useState([0, 0, 0, 0, 0]);
   const [bet, setBet] = useState(lastBetAmount);
   const [selectedHorse, setSelectedHorse] = useState(-1);
-  const [gameCode, setGameCode] = useState('');
   const [resultStatus, setResultStatus] = useState<'win' | 'lose' | null>(null);
+  const [gameCode, setGameCode] = useState('');
+
+  const buyTicket = () => {
+    if (coins < TICKET_COST) {
+      alert(`需要 $${TICKET_COST} 金幣才能購票入場！`);
+      return;
+    }
+    setCoins(c => c - TICKET_COST);
+    setHasTicket(true);
+  };
 
   const handleCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    // 只允許數字且長度最多 4 位
     if (/^\d*$/.test(val) && val.length <= 4) {
       setGameCode(val);
-      
-      // 特殊代碼邏輯
       if (val === '0000') {
         setCoins(0);
         setGameCode('');
-        alert('開發者代碼：金幣已歸零');
+        alert('👨‍💻 開發者代碼：金幣已歸零');
       } else if (val === '9999') {
-        setCoins(999999); // 假設最大值
+        setCoins(9999);
         setGameCode('');
-        alert('開發者代碼：金幣已加至最大值');
+        alert('👨‍💻 開發者代碼：金幣已加至 9999');
       }
     }
   };
@@ -62,11 +69,8 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
           if (next.some(pos => pos >= 100)) {
             setRacing(false);
             const winner = next.indexOf(Math.max(...next));
-            
-            // Win logic based on selected horse
             if (winner === selectedHorse) {
               setCoins(c => c + bet * 2);
-              // Increment wins for leveling
               setUserProfile((prev: any) => ({
                 ...prev,
                 winsTowardsNextLevel: (prev.winsTowardsNextLevel || 0) + 1
@@ -75,10 +79,9 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
             } else {
               setResultStatus('lose');
             }
-
-            setTimeout(() => {
-              setResultStatus(null);
-            }, 2000);
+            // Ticket consumed after each race
+            setHasTicket(false);
+            setTimeout(() => setResultStatus(null), 2500);
           }
           return next;
         });
@@ -88,126 +91,184 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
   }, [racing, bet, setCoins, selectedHorse]);
 
   const startRace = () => {
-    if (selectedHorse === -1) return alert("請先選擇一匹馬進行下注！");
-    if (coins < bet) return alert("Not enough coins");
+    if (selectedHorse === -1) return alert('請先選擇一匹馬進行下注！');
+    if (coins < bet) return alert('金幣不足以下注！');
     setLastBetAmount(bet);
     setCoins(c => c - bet);
     setPositions([0, 0, 0, 0, 0]);
     setRacing(true);
   };
 
+  // --- TICKET GATE ---
+  if (!hasTicket) {
+    return (
+      <div className="p-0 bg-gray-50 min-h-screen">
+        <header className="px-6 pt-8 pb-4 flex items-center justify-between relative z-50">
+          <button onClick={() => navigateTo(AppRoute.HOME)} className="bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-sm border border-gray-100 hover:scale-110 active:scale-95 transition-all">
+            <ChevronLeft size={24} className="text-gray-600" />
+          </button>
+          <div className="text-center">
+            <h1 className="text-2xl font-black tracking-tighter text-gray-800 italic uppercase">Race Arena</h1>
+            <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mt-0.5">VIP Entry Required</p>
+          </div>
+          <div className="bg-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 border border-yellow-100/50">
+            <div className="w-8 h-8 bg-gradient-to-tr from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-inner">
+              <Coins size={16} className="text-white font-bold" />
+            </div>
+            <span className="font-black text-gray-800 text-lg">{coins}</span>
+          </div>
+        </header>
+
+        <div className="px-6 flex flex-col items-center justify-center min-h-[70vh] gap-8">
+          <motion.div
+            animate={{ y: [0, -12, 0], rotate: [-5, 5, -5] }}
+            transition={{ repeat: Infinity, duration: 2.5 }}
+            className="text-9xl drop-shadow-2xl"
+          >
+            🎟️
+          </motion.div>
+
+          <div className="text-center">
+            <h2 className="text-3xl font-black text-gray-800 tracking-tighter">入場券</h2>
+            <p className="text-gray-400 font-bold text-sm mt-2">購買入場券以進入賽馬場</p>
+            <p className="text-gray-400 font-bold text-xs mt-1">每場比賽結束後需重新購票</p>
+          </div>
+
+          <div className="w-full bg-white rounded-[2.5rem] p-8 shadow-2xl border border-gray-100 flex flex-col items-center gap-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-tr from-yellow-400 to-amber-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <Ticket size={24} className="text-white" />
+              </div>
+              <div>
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">入場費用</div>
+                <div className="text-3xl font-black text-gray-800">💰 {TICKET_COST}</div>
+              </div>
+            </div>
+
+            <div className="w-full space-y-2 text-sm">
+              {[
+                { icon: '🏇', text: '選擇你押注的馬匹' },
+                { icon: '💰', text: '設定你的賭注金額' },
+                { icon: '🏆', text: '贏得 2x 的賭注獎勵' },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-2xl px-4 py-3">
+                  <span className="text-xl">{item.icon}</span>
+                  <span className="text-gray-600 font-bold">{item.text}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={buyTicket}
+              disabled={coins < TICKET_COST}
+              className={`w-full py-5 rounded-[2rem] text-lg font-black uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-3 ${
+                coins < TICKET_COST
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:scale-[1.02] active:scale-95 shadow-emerald-200'
+              }`}
+            >
+              <Ticket size={20} />
+              {coins < TICKET_COST ? '金幣不足' : `購票入場 -$${TICKET_COST}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- RACE ARENA ---
   return (
     <div className="p-0 bg-gray-50 min-h-screen">
       <header className="px-6 pt-8 pb-4 flex items-center justify-between relative z-50">
-        <button 
-          onClick={() => navigateTo(AppRoute.HOME)} 
-          className="bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-sm border border-gray-100 hover:scale-110 active:scale-95 transition-all"
-        >
+        <button onClick={() => navigateTo(AppRoute.HOME)} className="bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-sm border border-gray-100 hover:scale-110 active:scale-95 transition-all">
           <ChevronLeft size={24} className="text-gray-600" />
         </button>
         <div className="text-center">
-           <h1 className="text-2xl font-black tracking-tighter text-gray-800 italic uppercase">Race Arena</h1>
-           <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mt-0.5">High Stakes Betting</p>
+          <h1 className="text-2xl font-black tracking-tighter text-gray-800 italic uppercase">Race Arena</h1>
+          <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mt-0.5">High Stakes Betting</p>
         </div>
         <div className="bg-white px-4 py-2 rounded-2xl shadow-xl flex items-center gap-3 border border-yellow-100/50 group hover:scale-105 transition-all">
           <div className="w-8 h-8 bg-gradient-to-tr from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-inner group-hover:rotate-12 transition-transform">
-             <Coins size={16} className="text-white font-bold" />
+            <Coins size={16} className="text-white font-bold" />
           </div>
           <span className="font-black text-gray-800 text-lg">{coins}</span>
         </div>
       </header>
 
       <div className="px-6 pb-8">
-        <div className={`rounded-[3.5rem] p-10 transition-all duration-700 mb-8 relative overflow-hidden border-[8px] border-white shadow-2xl ${racing ? 'bg-gray-900 border-emerald-500/30' : 'bg-gray-100'}`}>
-          {/* Animated Background Patern */}
+        {/* Race Track */}
+        <div className={`rounded-[3.5rem] p-6 transition-all duration-700 mb-8 relative overflow-hidden border-[8px] border-white shadow-2xl ${racing ? 'bg-gray-900 border-emerald-500/30' : 'bg-gray-100'}`}>
           <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(255,255,255,0.1) 35px, rgba(255,255,255,0.1) 70px)' }} />
-          
-          {/* Finish Line Indicator */}
-          <div className="absolute top-0 bottom-0 right-16 w-8 bg-[repeating-linear-gradient(0deg,#fff,#fff_10px,#000_10px,#000_20px)] opacity-20 z-0" />
-          <div className="absolute top-1/2 right-4 -translate-y-1/2 flex flex-col items-center gap-2 z-10 opacity-40">
-             <Flag size={20} className={racing ? 'text-emerald-500' : 'text-gray-400'} />
-             <div className="text-[10px] font-black uppercase tracking-widest writing-mode-vertical" style={{ writingMode: 'vertical-rl' }}>Goal</div>
+          {/* Finish Line */}
+          <div className="absolute top-0 bottom-0 right-12 w-6 bg-[repeating-linear-gradient(0deg,#fff,#fff_8px,#000_8px,#000_16px)] opacity-20 z-0" />
+          <div className="absolute top-1/2 right-3 -translate-y-1/2 flex flex-col items-center gap-1 z-10 opacity-40">
+            <Flag size={16} className={racing ? 'text-emerald-500' : 'text-gray-400'} />
           </div>
-          
-          <div className="flex gap-4 relative z-10">
-            {/* Race Tracks Column */}
-            <div className="flex-1 space-y-10">
-              {[1, 2, 3, 4, 5].map((h, i) => (
-                <div key={h} className="relative h-4 bg-gray-200/50 rounded-full backdrop-blur-sm border border-white/10">
-                  <motion.div 
+
+          {/* Tracks + Bet Buttons side by side, each row aligned */}
+          <div className="space-y-6 relative z-10">
+            {[1, 2, 3, 4, 5].map((h, i) => (
+              <div key={h} className="flex items-center gap-3">
+                {/* Horse number */}
+                <div className={`text-[10px] font-black w-5 text-center shrink-0 ${racing ? 'text-gray-400' : 'text-gray-500'}`}>
+                  0{h}
+                </div>
+                {/* Track bar */}
+                <div className="flex-1 relative h-4 bg-gray-200/50 rounded-full backdrop-blur-sm border border-white/10">
+                  <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: `${positions[i]}%` }}
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.5)]" 
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.5)]"
                   />
-                  
-                  {/* Horse with Gallop Animation */}
-                  <motion.div 
-                    animate={racing ? {
-                      y: [0, -12, 0],
-                      rotate: [-15, 15, -15],
-                      scaleX: -1
-                    } : { scaleX: -1 }}
-                    transition={racing ? {
-                      y: { repeat: Infinity, duration: 0.25 },
-                      rotate: { repeat: Infinity, duration: 0.25 }
-                    } : {}}
-                    className="absolute -top-8 text-5xl transition-all duration-100 ease-linear drop-shadow-lg z-20"
-                    style={{ left: `calc(${positions[i]}% - 25px)` }}
+                  {/* Horse */}
+                  <motion.div
+                    animate={racing ? { y: [0, -10, 0], rotate: [-12, 12, -12], scaleX: -1 } : { scaleX: -1 }}
+                    transition={racing ? { y: { repeat: Infinity, duration: 0.25 }, rotate: { repeat: Infinity, duration: 0.25 } } : {}}
+                    className="absolute -top-6 text-4xl transition-all duration-100 ease-linear drop-shadow-lg z-20"
+                    style={{ left: `calc(${positions[i]}% - 20px)` }}
                   >
                     🏇
                   </motion.div>
-  
-                  {/* Horse Number Label */}
-                  <div className="absolute -left-8 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400">0{h}</div>
                 </div>
-              ))}
-            </div>
-
-            {/* Betting Sidebar Column - Decoupled from Track for clean UX */}
-            <div className="w-16 flex flex-col justify-between py-0 space-y-10">
-              {[0, 1, 2, 3, 4].map((i) => (
+                {/* Bet button — aligned with each row */}
                 <button
-                  key={i}
                   onClick={() => !racing && setSelectedHorse(i)}
-                  className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all border-2 relative z-30 ${
-                    selectedHorse === i 
-                      ? 'bg-emerald-500 border-white text-white scale-110 shadow-[0_0_20px_rgba(16,185,129,0.4)] rotate-6' 
+                  disabled={racing}
+                  className={`shrink-0 w-12 h-8 rounded-xl flex items-center justify-center transition-all border-2 text-xs font-black ${
+                    selectedHorse === i
+                      ? 'bg-emerald-500 border-emerald-400 text-white scale-105 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
                       : 'bg-white border-gray-100 text-gray-400 hover:bg-emerald-50 hover:border-emerald-200'
                   }`}
-                  disabled={racing}
                 >
-                   {selectedHorse === i ? <Star size={20} fill="white" /> : <span className="text-xs font-black">P{i+1}</span>}
+                  {selectedHorse === i ? <Star size={14} fill="white" /> : `P${i + 1}`}
                 </button>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
 
+        {/* Wager */}
         <div className="space-y-5">
           <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-gray-100 flex justify-between items-center group">
             <div className="flex items-center gap-4">
-               <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-500 group-hover:rotate-12 transition-transform">
-                  <Coins size={24} />
-               </div>
-               <div>
-                  <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wager Amount</div>
-                  <div className="text-xl font-black text-gray-800">💰 {bet}</div>
-               </div>
+              <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-500 group-hover:rotate-12 transition-transform">
+                <Coins size={24} />
+              </div>
+              <div>
+                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Wager Amount</div>
+                <div className="text-xl font-black text-gray-800">💰 {bet}</div>
+              </div>
             </div>
             <div className="flex gap-2">
-                <button 
-                  onClick={() => setBet(b => Math.max(100, b - 100))} 
-                  className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                >
-                  -
-                </button>
-                <button 
-                  onClick={() => setBet(b => b + 100)} 
-                  className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400 hover:bg-emerald-50 hover:text-emerald-500 transition-colors"
-                >
-                  +
-                </button>
+              <button onClick={() => setBet(b => Math.max(100, b - 100))} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">-</button>
+              <button onClick={() => setBet(b => b + 100)} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-xl font-black text-gray-400 hover:bg-emerald-50 hover:text-emerald-500 transition-colors">+</button>
             </div>
+          </div>
+
+          {/* Ticket badge */}
+          <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-[2rem] px-5 py-3">
+            <Ticket size={18} className="text-emerald-600" />
+            <span className="text-sm font-black text-emerald-700">入場券生效中 — 比賽結束後需重新購票</span>
           </div>
 
           <div className="flex gap-4">
@@ -228,12 +289,12 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
              </div>
           </div>
 
-          <button 
+          <button
             onClick={startRace}
             disabled={racing || selectedHorse === -1 || coins < bet}
             className={`w-full py-6 rounded-[2.5rem] text-xl font-black uppercase tracking-widest shadow-2xl transition-all relative overflow-hidden flex items-center justify-center gap-3
-              ${racing 
-                ? 'bg-gray-200 text-gray-400' 
+              ${racing
+                ? 'bg-gray-200 text-gray-400'
                 : (selectedHorse === -1 || coins < bet)
                   ? 'bg-gray-800 text-gray-500 opacity-50 cursor-not-allowed'
                   : 'bg-gradient-to-r from-emerald-500 to-green-600 text-white hover:scale-[1.02] active:scale-95 shadow-emerald-200'
@@ -241,9 +302,9 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
             `}
           >
             {racing ? (
-               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}>
-                  <Zap size={24} />
-               </motion.div>
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                <Zap size={24} />
+              </motion.div>
             ) : <Play fill="white" size={24} />}
             {racing ? 'Racing...' : (selectedHorse === -1 ? 'Select Horse' : 'Start Race')}
           </button>
@@ -253,87 +314,31 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
       {/* Result Animations */}
       <AnimatePresence>
         {resultStatus === 'win' && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.5 }}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}
             className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
           >
-            <motion.div 
-              animate={{ 
-                y: [0, -20, 0],
-                rotate: [0, 10, -10, 0]
-              }}
-              transition={{ repeat: Infinity, duration: 0.5 }}
-              className="text-9xl mb-4"
-            >
-              🎉
-            </motion.div>
-            <motion.div 
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              className="bg-yellow-400 text-white px-8 py-4 rounded-full text-4xl font-black shadow-2xl border-4 border-white"
-            >
-              YOU WIN! 💰
-            </motion.div>
+            <motion.div animate={{ y: [0, -20, 0], rotate: [0, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 0.5 }} className="text-9xl mb-4">🎉</motion.div>
+            <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-yellow-400 text-white px-8 py-4 rounded-full text-4xl font-black shadow-2xl border-4 border-white">YOU WIN! 💰</motion.div>
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
               {[...Array(20)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ 
-                    x: 0, 
-                    y: 0, 
-                    opacity: 1 
-                  }}
-                  animate={{ 
-                    x: (Math.random() - 0.5) * 1000, 
-                    y: (Math.random() - 0.5) * 1000,
-                    opacity: 0,
-                    rotate: Math.random() * 360
-                  }}
-                  transition={{ duration: 1.5, ease: "easeOut" }}
-                  className="absolute text-2xl"
-                >
+                <motion.div key={i} initial={{ x: 0, y: 0, opacity: 1 }} animate={{ x: (Math.random() - 0.5) * 1000, y: (Math.random() - 0.5) * 1000, opacity: 0, rotate: Math.random() * 360 }} transition={{ duration: 1.5, ease: 'easeOut' }} className="absolute text-2xl">
                   {['✨', '⭐', '💎', '💰', '🎊'][Math.floor(Math.random() * 5)]}
                 </motion.div>
               ))}
             </div>
           </motion.div>
         )}
-
         {resultStatus === 'lose' && (
-          <motion.div 
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -50 }}
+          <motion.div
+            initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -50 }}
             className="fixed inset-0 z-[100] flex flex-col items-center justify-center pointer-events-none"
           >
-            <motion.div 
-              animate={{ 
-                scale: [1, 1.1, 1],
-                rotate: [0, 5, -5, 0]
-              }}
-              transition={{ repeat: Infinity, duration: 1 }}
-              className="text-9xl mb-4"
-            >
-              😭
-            </motion.div>
-            <motion.div 
-              className="bg-gray-800 text-white px-8 py-4 rounded-full text-4xl font-black shadow-2xl border-4 border-gray-600"
-            >
-              YOU LOSE...
-            </motion.div>
+            <motion.div animate={{ scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }} transition={{ repeat: Infinity, duration: 1 }} className="text-9xl mb-4">😭</motion.div>
+            <motion.div className="bg-gray-800 text-white px-8 py-4 rounded-full text-4xl font-black shadow-2xl border-4 border-gray-600">YOU LOSE...</motion.div>
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
               {[...Array(10)].map((_, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ y: -100, x: (Math.random() - 0.5) * 400, opacity: 0 }}
-                  animate={{ y: 500, opacity: [0, 1, 0] }}
-                  transition={{ duration: 2, delay: Math.random() * 1 }}
-                  className="absolute text-3xl"
-                >
-                  💧
-                </motion.div>
+                <motion.div key={i} initial={{ y: -100, x: (Math.random() - 0.5) * 400, opacity: 0 }} animate={{ y: 500, opacity: [0, 1, 0] }} transition={{ duration: 2, delay: Math.random() * 1 }} className="absolute text-3xl">💧</motion.div>
               ))}
             </div>
           </motion.div>

@@ -8,14 +8,13 @@ interface GameViewProps {
   navigateTo: (route: AppRoute) => void;
   coins: number;
   setCoins: React.Dispatch<React.SetStateAction<number>>;
-  placedItems: {id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string}[];
-  setPlacedItems: React.Dispatch<React.SetStateAction<{id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string}[]>>;
+  placedItems: {
+    id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string,
+    hunger: number, thirst: number, affection: number
+  }[];
+  setPlacedItems: React.Dispatch<React.SetStateAction<any[]>>;
   activeAreas: string[];
   setActiveAreas: React.Dispatch<React.SetStateAction<string[]>>;
-  purchasedBackgrounds: string[];
-  setPurchasedBackgrounds: React.Dispatch<React.SetStateAction<string[]>>;
-  areaBackgrounds: Record<string, string>;
-  setAreaBackgrounds: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   areaNames: Record<string, string>;
   setAreaNames: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
@@ -109,7 +108,6 @@ const BACKGROUNDS: Item[] = [
 
 const GameView: React.FC<GameViewProps> = ({ 
   navigateTo, coins, setCoins, placedItems, setPlacedItems, activeAreas, setActiveAreas,
-  purchasedBackgrounds, setPurchasedBackgrounds, areaBackgrounds, setAreaBackgrounds,
   areaNames, setAreaNames
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -165,50 +163,35 @@ const GameView: React.FC<GameViewProps> = ({
     setTimeout(resetScroll, 50);
   }, []);
 
-  const [activeTab, setActiveTab] = useState<'items' | 'backgrounds'>('items');
+  const [activeTab, setActiveTab] = useState<'items'>('items');
 
   const buyItem = (item: Item) => {
-    if (item.type === 'asset') {
-      // Check if current area already has 10 items
-      const itemsInCurrentArea = placedItems.filter(p => p.areaId === currentAreaId).length;
-      if (itemsInCurrentArea >= 10) {
-        alert("此區域已達10個寵物上限！");
-        return;
-      }
-    }
-
-    if (item.type === 'background') {
-      if (item.id === 'default') {
-        setAreaBackgrounds(prev => {
-          const next = { ...prev };
-          delete next[currentAreaId];
-          return next;
-        });
-        return;
-      }
-      if (purchasedBackgrounds.includes(item.id)) {
-        // Already owned, just apply it
-        setAreaBackgrounds(prev => ({ ...prev, [currentAreaId]: item.id }));
-        return;
-      }
+    // Check if current area already has an animal
+    const petInCurrentArea = placedItems.find(p => p.areaId === currentAreaId);
+    if (petInCurrentArea) {
+      alert("此區域已有一隻寵物！");
+      return;
     }
 
     if (coins >= item.price) {
       setCoins(prev => prev - item.price);
-      if (item.type === 'asset') {
-        setPlacedItems(prev => [...prev, {
-          id: Date.now().toString(),
-          x: Math.random() * 80 + 10,
-          y: Math.random() * 80 + 10,
-          char: item.image,
-          isReacting: false,
-          clickCount: 0,
-          areaId: currentAreaId
-        }]);
-      } else if (item.type === 'background') {
-        setPurchasedBackgrounds(prev => [...prev, item.id]);
-        setAreaBackgrounds(prev => ({ ...prev, [currentAreaId]: item.id }));
-      }
+      setPlacedItems(prev => [...prev, {
+        id: Date.now().toString(),
+        x: 50, // Center
+        y: 50, // Center
+        char: item.image,
+        isReacting: false,
+        clickCount: 0,
+        areaId: currentAreaId,
+        hunger: 100,
+        thirst: 100,
+        affection: 100,
+        isDead: false,
+        dailyFood: 0,
+        dailyWater: 0,
+        dailyAffection: 0,
+        lastCareDate: new Date().toISOString().slice(0, 10)
+      }]);
     } else {
       alert("Not enough coins!");
     }
@@ -235,19 +218,34 @@ const GameView: React.FC<GameViewProps> = ({
     setActiveAreas(prev => prev.filter(id => id !== areaId));
   };
 
-  const handleEmojiClick = (id: string) => {
-    setPlacedItems(prev => {
-      const item = prev.find(p => p.id === id);
-      if (!item) return prev;
+  const handleEmojiClick = (id: string, type: 'hunger' | 'thirst' | 'affection') => {
+    if (coins < 50) {
+      alert("你需要 $50 金幣來照顧寵物！");
+      return;
+    }
+
+    setCoins(prev => prev - 50);
+    setPlacedItems(prev => prev.map(p => {
+      if (p.id !== id) return p;
       
-      const newClickCount = (item.clickCount || 0) + 1;
+      const updates: any = { isReacting: true };
+      if (type === 'hunger') {
+        updates.hunger = Math.min(100, p.hunger + 20);
+        updates.dailyFood = Math.min(3, (p.dailyFood || 0) + 1);
+      }
+      if (type === 'thirst') {
+        updates.thirst = Math.min(100, p.thirst + 20);
+        updates.dailyWater = Math.min(3, (p.dailyWater || 0) + 1);
+      }
+      if (type === 'affection') {
+        updates.affection = Math.min(100, p.affection + 15);
+        updates.clickCount = (p.clickCount || 0) + 1;
+        updates.dailyAffection = Math.min(3, (p.dailyAffection || 0) + 1);
+      }
       
-      return prev.map(p => 
-        p.id === id ? { ...p, isReacting: true, clickCount: newClickCount } : p
-      );
-    });
+      return { ...p, ...updates };
+    }));
     
-    // Reset reaction state after normal animation
     setTimeout(() => {
       setPlacedItems(prev => prev.map(item => 
         item.id === id ? { ...item, isReacting: false } : item
@@ -314,7 +312,6 @@ const GameView: React.FC<GameViewProps> = ({
                 handleEmojiClick={handleEmojiClick}
                 removeEmoji={removeEmoji}
                 onRemove={() => removeArea(areaId)}
-                background={BACKGROUNDS.find(b => b.id === areaBackgrounds[areaId])}
                 areaName={areaNames[areaId] || ''}
                 setAreaName={(name) => setAreaNames(prev => ({ ...prev, [areaId]: name }))}
               />
@@ -340,23 +337,15 @@ const GameView: React.FC<GameViewProps> = ({
       <div className="flex-1 bg-white rounded-t-[3.5rem] p-8 shadow-[0_-20px_40px_rgba(0,0,0,0.02)] border-t border-gray-100">
         <div className="bg-gray-100/80 backdrop-blur-sm rounded-[2rem] flex p-1.5 mb-8 border border-gray-200/50">
           <button 
-            onClick={() => setActiveTab('items')}
-            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'items' ? 'bg-white text-blue-600 shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}
+            className="flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-[1.5rem] bg-white text-blue-600 shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
           >
             <ShoppingBag size={14} />
             Items
           </button>
-          <button 
-            onClick={() => setActiveTab('backgrounds')}
-            className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-[1.5rem] transition-all duration-300 flex items-center justify-center gap-2 ${activeTab === 'backgrounds' ? 'bg-white text-indigo-600 shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            <Layers size={14} />
-            Ecology
-          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-5">
-          {(activeTab === 'items' ? ITEMS : BACKGROUNDS).map(item => (
+          {ITEMS.map(item => (
             <button 
               key={item.id}
               onClick={() => buyItem(item)}
@@ -367,38 +356,17 @@ const GameView: React.FC<GameViewProps> = ({
               </div>
               
               <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">
-                 {item.type === 'asset' ? (item.id.startsWith('a') ? 'Animal' : item.id.startsWith('f') ? 'Food' : 'Toy') : 'Space'}
+                 {item.id.startsWith('a') ? 'Animal' : item.id.startsWith('f') ? 'Food' : 'Toy'}
               </p>
               <h4 className="text-sm font-black text-gray-800 mb-4">{item.name}</h4>
               
               <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 overflow-hidden shadow-inner border border-gray-100">
-                {item.type === 'background' ? (
-                  item.id === 'default' ? (
-                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-2xl text-white">
-                       {item.image}
-                    </div>
-                  ) : (
-                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  )
-                ) : (
-                  <span className="text-5xl drop-shadow-lg">{item.image}</span>
-                )}
+                <span className="text-5xl drop-shadow-lg">{item.image}</span>
               </div>
               
               <div className="flex items-center gap-1 bg-yellow-400/10 px-4 py-1.5 rounded-full border border-yellow-400/20">
-                {item.type === 'background' && (item.id === 'default' || purchasedBackgrounds.includes(item.id)) ? (
-                  <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
-                    {item.id === 'default' 
-                      ? (!areaBackgrounds[currentAreaId] ? 'Active' : 'Apply')
-                      : (areaBackgrounds[currentAreaId] === item.id ? 'Active' : 'Apply')
-                    }
-                  </span>
-                ) : (
-                  <>
-                    <Star size={10} className="text-yellow-600 fill-yellow-600" />
-                    <span className="text-xs font-black text-yellow-700">{item.price}</span>
-                  </>
-                )}
+                <Star size={10} className="text-yellow-600 fill-yellow-600" />
+                <span className="text-xs font-black text-yellow-700">{item.price}</span>
               </div>
             </button>
           ))}
@@ -412,16 +380,15 @@ export default GameView;
 
 interface AreaBoxProps {
   areaId: string;
-  items: {id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string}[];
-  handleEmojiClick: (id: string) => void;
+  items: {id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string, hunger: number, thirst: number, affection: number}[];
+  handleEmojiClick: (id: string, type: 'hunger' | 'thirst' | 'affection') => void;
   removeEmoji: (id: string) => void;
   onRemove: () => void;
-  background?: Item;
   areaName: string;
   setAreaName: (name: string) => void;
 }
 
-const AreaBox: React.FC<AreaBoxProps> = ({ areaId, items, handleEmojiClick, removeEmoji, onRemove, background, areaName, setAreaName }) => {
+const AreaBox: React.FC<AreaBoxProps> = ({ areaId, items, handleEmojiClick, removeEmoji, onRemove, areaName, setAreaName }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showRemove, setShowRemove] = useState(false);
   const hoverTimer = useRef<any>(null);
@@ -457,26 +424,21 @@ const AreaBox: React.FC<AreaBoxProps> = ({ areaId, items, handleEmojiClick, remo
 
   const areaStyle = getAreaStyle();
 
+  const pet = items[0];
+  const hp = pet ? Math.round((pet.hunger + pet.thirst + pet.affection) / 3) : 0;
+  const dailyFood = pet?.dailyFood || 0;
+  const dailyWater = pet?.dailyWater || 0;
+  const dailyAffection = pet?.dailyAffection || 0;
+  const allQuotaMet = dailyFood >= 3 && dailyWater >= 3 && dailyAffection >= 3;
+
   return (
     <div 
       ref={containerRef}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className={`relative flex-shrink-0 w-full aspect-square rounded-[3.5rem] shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)] overflow-hidden border-[12px] border-white touch-none snap-center transform transition-transform`}
+      className={`relative flex-shrink-0 w-full aspect-square rounded-[3.5rem] shadow-[inset_0_4px_20px_rgba(0,0,0,0.05)] overflow-hidden border-[12px] border-white touch-none snap-center transform transition-transform bg-gradient-to-br ${areaStyle.gradient}`}
     >
-      {/* Dynamic Themed Background */}
-      {background ? (
-        <img 
-          src={background.image} 
-          alt={background.name} 
-          className="absolute inset-0 w-full h-full object-cover"
-          referrerPolicy="no-referrer"
-        />
-      ) : (
-        <div className={`absolute inset-0 bg-gradient-to-br ${areaStyle.gradient}`}>
-           <div className={`absolute inset-0 ${areaStyle.pattern}`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${areaStyle.patternPath}' fill='%23000' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E")` }} />
-        </div>
-      )}
+      <div className={`absolute inset-0 ${areaStyle.pattern}`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='${areaStyle.patternPath}' fill='%23000' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E")` }} />
       
       {/* Glowing Ambient Light */}
       <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/40 to-transparent pointer-events-none" />
@@ -510,38 +472,106 @@ const AreaBox: React.FC<AreaBoxProps> = ({ areaId, items, handleEmojiClick, remo
         )}
       </AnimatePresence>
 
-      {items.map(item => (
-        <EmojiItem 
-          key={item.id}
-          item={item}
-          handleEmojiClick={handleEmojiClick}
-          removeEmoji={removeEmoji}
-        />
-      ))}
+      {/* Pet Section */}
+      {pet ? (
+        <>
+          <EmojiItem 
+            item={pet}
+            handleEmojiClick={() => handleEmojiClick(pet.id, 'affection')}
+          />
+          
+          {/* Controls Overlay */}
+          <div className="absolute bottom-20 left-0 right-0 flex justify-center gap-4 z-40">
+            <button 
+              onClick={(e) => { e.stopPropagation(); if(!pet.isDead) handleEmojiClick(pet.id, 'hunger'); }}
+              disabled={pet.isDead}
+              className={`relative w-14 h-14 bg-white/80 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all border-2 ${
+                pet.isDead ? 'grayscale opacity-50 cursor-not-allowed border-white' :
+                dailyFood >= 3 ? 'border-green-400 bg-green-50/80' : 'border-white'
+              }`}
+            >
+              <span className="text-xl">🍎</span>
+              <span className={`text-[8px] font-black ${dailyFood >= 3 ? 'text-green-600' : 'text-amber-600'}`}>
+                {dailyFood}/3
+              </span>
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); if(!pet.isDead) handleEmojiClick(pet.id, 'thirst'); }}
+              disabled={pet.isDead}
+              className={`relative w-14 h-14 bg-white/80 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all border-2 ${
+                pet.isDead ? 'grayscale opacity-50 cursor-not-allowed border-white' :
+                dailyWater >= 3 ? 'border-green-400 bg-green-50/80' : 'border-white'
+              }`}
+            >
+              <span className="text-xl">💧</span>
+              <span className={`text-[8px] font-black ${dailyWater >= 3 ? 'text-green-600' : 'text-amber-600'}`}>
+                {dailyWater}/3
+              </span>
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); if(!pet.isDead) handleEmojiClick(pet.id, 'affection'); }}
+              disabled={pet.isDead}
+              className={`relative w-14 h-14 bg-white/80 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all border-2 ${
+                pet.isDead ? 'grayscale opacity-50 cursor-not-allowed border-white' :
+                dailyAffection >= 3 ? 'border-green-400 bg-green-50/80' : 'border-white'
+              }`}
+            >
+              <span className="text-xl">❤️</span>
+              <span className={`text-[8px] font-black ${dailyAffection >= 3 ? 'text-green-600' : 'text-amber-600'}`}>
+                {dailyAffection}/3
+              </span>
+            </button>
+          </div>
+
+          {/* Daily Quota Banner */}
+          {allQuotaMet && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
+              <div className="bg-green-500/90 backdrop-blur-md text-white text-[9px] font-black px-3 py-1 rounded-full shadow-lg tracking-widest uppercase">
+                ✅ 今日配額達成！
+              </div>
+            </div>
+          )}
+
+          {/* HP Bar Section */}
+          <div className="absolute bottom-6 left-8 right-8 z-40">
+            <div className="flex justify-between items-center mb-1.5 px-1">
+              <span className="text-[10px] font-black text-gray-800 tracking-widest uppercase">{pet.isDead ? 'Status: Passed Away' : 'Health'}</span>
+              <span className="text-[10px] font-black text-gray-800">{pet.isDead ? '0' : hp}%</span>
+            </div>
+            <div className="h-2.5 bg-black/5 rounded-full overflow-hidden border border-white/50 backdrop-blur-sm">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${pet.isDead ? 0 : hp}%` }}
+                className={`h-full transition-all duration-1000 ${
+                  pet.isDead ? 'bg-gray-400' :
+                  hp > 60 ? 'bg-gradient-to-r from-emerald-400 to-green-500' :
+                  hp > 30 ? 'bg-gradient-to-r from-orange-400 to-amber-500' :
+                  'bg-gradient-to-r from-red-500 to-rose-600'
+                }`}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-black/20 font-black text-xs uppercase tracking-widest">
+           Empty Area
+        </div>
+      )}
     </div>
   );
 };
 
 interface EmojiItemProps {
   item: any;
-  handleEmojiClick: (id: string) => void;
-  removeEmoji: (id: string) => void;
+  handleEmojiClick: () => void;
 }
 
-const EmojiItem: React.FC<EmojiItemProps> = ({ item, handleEmojiClick, removeEmoji }) => {
+const EmojiItem: React.FC<EmojiItemProps> = ({ item, handleEmojiClick }) => {
   const itemRef = useRef<HTMLDivElement>(null);
   const lastTap = useRef(0);
 
   const handleTap = () => {
-    const now = Date.now();
-    const DOUBLE_TAP_DELAY = 300;
-    
-    if (now - lastTap.current < DOUBLE_TAP_DELAY) {
-      removeEmoji(item.id);
-    } else {
-      handleEmojiClick(item.id);
-    }
-    lastTap.current = now;
+    handleEmojiClick();
   };
 
   return (
@@ -568,8 +598,8 @@ const EmojiItem: React.FC<EmojiItemProps> = ({ item, handleEmojiClick, removeEmo
       }}
     >
       <div className="relative">
-        <div className="text-5xl drop-shadow-xl filter group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.8)] transition-all">
-          {item.char}
+        <div className={`text-5xl drop-shadow-xl filter transition-all ${item.isDead ? 'grayscale opacity-60' : 'group-hover:drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]'}`}>
+          {item.isDead ? '👻' : item.char}
         </div>
         
         {/* Level Toast based on Click Count */}

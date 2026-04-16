@@ -25,6 +25,26 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
     setAppSettings((prev: any) => ({ ...prev, [key]: value }));
   };
 
+  const handleTimerEndNotifyToggle = () => {
+    const newVal = !appSettings.timerEndNotify;
+    updateSetting('timerEndNotify', newVal);
+    if (newVal && 'Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission().then(perm => {
+        if (perm !== 'granted') {
+          alert('請允許通知權限，才能接收專注提醒。');
+        }
+      });
+    }
+  };
+
+  const handleFocusReminderToggle = () => {
+    const newVal = !appSettings.focusReminder;
+    updateSetting('focusReminder', newVal);
+    if (newVal && 'Notification' in window && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+  };
+
   const Toggle = ({label, value, onToggle}: {label: string, value: boolean, onToggle: () => void}) => (
     <div 
       onClick={onToggle}
@@ -93,7 +113,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
                 <Toggle 
                   label="計時器結束時通知我" 
                   value={appSettings.timerEndNotify} 
-                  onToggle={() => updateSetting('timerEndNotify', !appSettings.timerEndNotify)} 
+                  onToggle={handleTimerEndNotifyToggle} 
                 />
                 <NumberSelector 
                   label="即將結束時長" 
@@ -109,7 +129,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
                 <Toggle 
                   label="啟用番茄鐘專注提醒" 
                   value={appSettings.focusReminder} 
-                  onToggle={() => updateSetting('focusReminder', !appSettings.focusReminder)} 
+                  onToggle={handleFocusReminderToggle} 
                 />
                 <NumberSelector 
                   label="提醒頻率" 
@@ -117,7 +137,23 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
                   value={appSettings.focusReminderInterval} 
                   onChange={(val) => updateSetting('focusReminderInterval', val)} 
                 />
-                <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">專注提醒會發出輕微提示音來提醒你保持專注，可在你容易分心時幫助你回神。</p>
+                <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">專注提醒會在每隔設定時間後發出系統通知，提醒你保持專注。</p>
+
+                {/* Permission Status Badge */}
+                {'Notification' in window && (
+                  <div className={`mt-3 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
+                    Notification.permission === 'granted' ? 'bg-green-50 text-green-600' :
+                    Notification.permission === 'denied' ? 'bg-red-50 text-red-500' :
+                    'bg-yellow-50 text-yellow-600'
+                  }`}>
+                    <span>{Notification.permission === 'granted' ? '✅' : Notification.permission === 'denied' ? '🚫' : '⚠️'}</span>
+                    <span>{
+                      Notification.permission === 'granted' ? '通知權限已授予' :
+                      Notification.permission === 'denied' ? '通知已被封鎖，請至瀏覽器設定手動開啟' :
+                      '尚未授予通知權限'
+                    }</span>
+                  </div>
+                )}
               </div>
 
               {/* 導覽重置 */}

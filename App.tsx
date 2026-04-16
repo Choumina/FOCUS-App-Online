@@ -65,7 +65,11 @@ const App: React.FC = () => {
     registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
   });
   const [lastBetAmount, setLastBetAmount] = useState(100);
-  const [placedItems, setPlacedItems] = useState<{ id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string }[]>([]);
+  const [placedItems, setPlacedItems] = useState<{ 
+    id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string,
+    hunger: number, thirst: number, affection: number, isDead: boolean,
+    dailyFood: number, dailyWater: number, dailyAffection: number, lastCareDate: string
+  }[]>([]);
   const [visibleSubSections, setVisibleSubSections] = useState<Record<string, string[]>>({
     focus: ['tasks', 'timer', 'analysis'],
     calendar: ['calendar_card'],
@@ -290,7 +294,7 @@ const App: React.FC = () => {
         const initialData = {
           id: authUser.id,
           email: authEmail,
-          points: 0,
+          points: 500,
           home_config: ['focus', 'calendar', 'games'],
           placed_items: [],
           tasks: [],
@@ -448,10 +452,47 @@ const App: React.FC = () => {
       setTimerIsActive(false);
       setCoins(c => c + 500);
       saveFocusLog(timerTotalTime);
-      alert("太棒了！專注時段已結束。");
+
+      // --- Completion Sound (Web Audio API) ---
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const playTone = (freq: number, start: number, duration: number) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(0.4, ctx.currentTime + start);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + start + duration);
+        };
+        // A cheerful 5-note melody
+        playTone(523.25, 0.0, 0.3);  // C5
+        playTone(659.25, 0.35, 0.3); // E5
+        playTone(783.99, 0.7, 0.3);  // G5
+        playTone(1046.5, 1.05, 0.4); // C6
+        playTone(1318.5, 1.5, 0.6);  // E6 (long)
+      } catch (e) {
+        console.warn('Audio playback failed:', e);
+      }
+
+      // --- Browser Notification ---
+      if (appSettings.timerEndNotify && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          new Notification('🎉 專注完成！', { body: '你已完成一段專注時段，獲得 500 金幣！', icon: '/favicon.ico' });
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then(perm => {
+            if (perm === 'granted') {
+              new Notification('🎉 專注完成！', { body: '你已完成一段專注時段，獲得 500 金幣！', icon: '/favicon.ico' });
+            }
+          });
+        }
+      }
     }
     return () => clearTimeout(interval);
-  }, [timerIsActive, timerTimeLeft, timerTotalTime, sessionStartTime, saveFocusLog]);
+  }, [timerIsActive, timerTimeLeft, timerTotalTime, sessionStartTime, saveFocusLog, appSettings]);
 
   // Handle manual stop/pause logging
   useEffect(() => {
@@ -460,6 +501,88 @@ const App: React.FC = () => {
       saveFocusLog(secondsSpent);
     }
   }, [timerIsActive, sessionStartTime, timerTimeLeft, timerTotalTime, saveFocusLog]);
+
+  // Pet Needs Decay Logic (Every 5 minutes)
+  useEffect(() => {
+    const decayInterval = setInterval(() => {
+      setPlacedItems(prev => prev.map(item => {
+        if (item.isDead) return item;
+
+        // Base decay
+        const newHunger = Math.max(0, item.hunger - 2);
+        const newThirst = Math.max(0, item.thirst - 3);
+        const newAffection = Math.max(0, item.affection - 1);
+        
+        // Starvation damage: if hunger or thirst is 0, lose affection/hp
+        let affectionPenalty = 0;
+        if (newHunger === 0) affectionPenalty += 5;
+        if (newThirst === 0) affectionPenalty += 5;
+
+        const finalAffection = Math.max(0, newAffection - affectionPenalty);
+        const isNowDead = (newHunger + newThirst + finalAffection) / 3 <= 0;
+
+        return {
+          ...item,
+          hunger: newHunger,
+          thirst: newThirst,
+          affection: finalAffection,
+          isDead: isNowDead
+        };
+      }));
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    return () => clearInterval(decayInterval);
+  }, []);
+
+  // Daily Care Quota Check (runs on load and every minute)
+  useEffect(() => {
+    const CHECK_QUOTA = () => {
+      const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+      setPlacedItems(prev => prev.map(item => {
+        if (item.isDead) return item;
+        const lastDate = item.lastCareDate || today;
+        // If the date has rolled over to a new day
+        if (lastDate !== today) {
+          // Check if they met the quota for the PREVIOUS day
+          const metQuota =
+            (item.dailyFood || 0) >= 3 &&
+            (item.dailyWater || 0) >= 3 &&
+            (item.dailyAffection || 0) >= 3;
+
+          return {
+            ...item,
+            isDead: !metQuota, // Kill if quota wasn't met
+            dailyFood: 0,
+            dailyWater: 0,
+            dailyAffection: 0,
+            lastCareDate: today
+          };
+        }
+        // Same day, ensure lastCareDate is set
+        return lastDate === today ? item : { ...item, lastCareDate: today };
+      }));
+    };
+
+    CHECK_QUOTA(); // Run immediately on mount
+    const interval = setInterval(CHECK_QUOTA, 60 * 1000); // Then every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle Focus Penalty (Emotional Neglect)
+  useEffect(() => {
+    // If timer becomes inactive but we didn't finish and also didn't even reach 1 minute
+    // This identifies a "Reset" or "Instant Cancel"
+    if (!timerIsActive && sessionStartTime && timerTimeLeft > 0) {
+      const secondsSpent = timerTotalTime - timerTimeLeft;
+      if (secondsSpent < 60) {
+        // DAMAGE PENALTY
+        setPlacedItems(prev => prev.map(item => ({
+          ...item,
+          affection: Math.max(0, item.affection - 15) // Pets get sad when you give up!
+        })));
+      }
+    }
+  }, [timerIsActive, sessionStartTime, timerTimeLeft, timerTotalTime]);
 
   const navigateTo = (route: AppRoute) => {
     setCurrentRoute(route);
@@ -584,10 +707,6 @@ const App: React.FC = () => {
           setPlacedItems={setPlacedItems}
           activeAreas={activeAreas}
           setActiveAreas={setActiveAreas}
-          purchasedBackgrounds={purchasedBackgrounds}
-          setPurchasedBackgrounds={setPurchasedBackgrounds}
-          areaBackgrounds={areaBackgrounds}
-          setAreaBackgrounds={setAreaBackgrounds}
           areaNames={areaNames}
           setAreaNames={setAreaNames}
         />;
@@ -601,7 +720,7 @@ const App: React.FC = () => {
           setUserProfile={setUserProfile}
         />;
       case AppRoute.LEADERBOARD:
-        return <LeaderboardView navigateTo={navigateTo} userProfile={userProfile} coins={coins} />;
+        return <LeaderboardView navigateTo={navigateTo} userProfile={userProfile} coins={coins} focusLogs={focusLogs} placedItems={placedItems} />;
       case AppRoute.SETTINGS:
         return <SettingsView 
           navigateTo={navigateTo} 
@@ -821,12 +940,14 @@ const App: React.FC = () => {
       setShowDeleteConfirm(false);
       const uid = user.id;
 
-      // 1. Delete user data
+      // 1. Delete all related user data from Supabase
+      await supabase.from('friendships').delete().eq('user_id', uid);
+      await supabase.from('friendships').delete().eq('friend_id', uid);
+      await supabase.from('focus_logs').delete().eq('user_id', uid);
       await supabase.from('users').delete().eq('id', uid);
 
-      // 2. Delete Auth user (requires RPC or edge function usually, 
-      // but for client-side we'll just logout for now, 
-      // as deleting auth user directly from client is restricted)
+      // 2. Delete Auth user via RPC (if configured), otherwise sign out
+      // The admin delete requires a Supabase Edge Function; for now we sign out
       await supabase.auth.signOut();
 
       // 3. Reset local states
