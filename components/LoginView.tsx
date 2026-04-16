@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../supabase';
 import { LogIn, Sparkles, ShieldCheck, Zap, Loader2, Mail, Lock, UserPlus, ArrowLeft, Chrome } from 'lucide-react';
+import { AuthError } from '@supabase/supabase-js';
 
 interface LoginViewProps {
   onLoginStart?: () => void; // Optional callback
@@ -29,14 +30,15 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginStart }) => {
         }
       });
       if (error) throw error;
-    } catch (error: any) {
-      console.error("Google login failed:", error);
-      alert(`登入失敗: ${error.message}`);
+    } catch (error: unknown) {
+      const authError = error as AuthError;
+      console.error("Google login failed:", authError);
+      alert(`登入失敗: ${authError.message}`);
       setIsLoading(false);
     }
   };
 
-  const getAuthErrorMessage = (error: any): string => {
+  const getAuthErrorMessage = (error: AuthError): string => {
     const msg = error?.message || '';
     if (msg.includes('Invalid login credentials')) return '帳號或密碼錯誤，請重新確認。';
     if (msg.includes('Email not confirmed')) return '請先前往您的信箱，點擊驗證連結後再登入。\n（或者您可以聯絡管理員關閉信箱驗證）';
@@ -84,9 +86,10 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginStart }) => {
         });
         if (error) throw error;
       }
-    } catch (error: any) {
-      console.error("Manual auth failed:", error);
-      alert(getAuthErrorMessage(error));
+    } catch (error: unknown) {
+      const authError = error as AuthError;
+      console.error("Manual auth failed:", authError);
+      alert(getAuthErrorMessage(authError));
     } finally {
       setIsLoading(false);
     }

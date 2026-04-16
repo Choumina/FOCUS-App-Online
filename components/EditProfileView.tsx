@@ -1,17 +1,12 @@
 import React, { useState, useRef } from 'react';
-import { AppRoute, CalendarEvent, UserIdentity } from '../types';
+import { AppRoute, CalendarEvent, UserIdentity, UserProfile } from '../types';
 import ViewHeader from './ViewHeader';
 import { Camera, Check, GraduationCap, School, User } from 'lucide-react';
 
 interface EditProfileViewProps {
   navigateTo: (route: AppRoute) => void;
-  userProfile: {
-    name: string;
-    bio: string;
-    avatar: string;
-    identity?: UserIdentity;
-  };
-  setUserProfile: React.Dispatch<React.SetStateAction<any>>;
+  userProfile: UserProfile;
+  setUserProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
   setCalendarEvents?: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
 }
 
@@ -151,7 +146,7 @@ const EditProfileView: React.FC<EditProfileViewProps> = ({ navigateTo, userProfi
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
-    setUserProfile((prev: any) => ({ ...prev, name, bio, avatar, identity }));
+    setUserProfile((prev: UserProfile) => ({ ...prev, name, bio, avatar, identity }));
 
     // 如果身份有改變，更新預設行事曆事件
     if (identityChanged && setCalendarEvents) {

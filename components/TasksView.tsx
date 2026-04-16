@@ -6,6 +6,11 @@ import { generateTaskBreakdown } from '../geminiService';
 import ViewHeader from './ViewHeader';
 import { motion, AnimatePresence } from 'motion/react';
 
+interface Subtask {
+  title: string;
+  description?: string;
+}
+
 interface TasksViewProps {
   navigateTo: (route: AppRoute) => void;
   tasks: Task[];
@@ -27,7 +32,7 @@ const TasksView: React.FC<TasksViewProps> = ({
   const [localNewTitle, setLocalNewTitle] = useState('');
   const [confirmTask, setConfirmTask] = useState<Task | null>(null);
   const [isBreakingDown, setIsBreakingDown] = useState<string | null>(null);
-  const [breakdownResults, setBreakdownResults] = useState<{taskId: string, subtasks: any[]}>({ taskId: '', subtasks: [] });
+  const [breakdownResults, setBreakdownResults] = useState<{taskId: string, subtasks: Subtask[]}>({ taskId: '', subtasks: [] });
   
   const isAdding = isAddingProp !== undefined ? isAddingProp : localIsAdding;
   const setIsAdding = setIsAddingProp !== undefined ? setIsAddingProp : setLocalIsAdding;

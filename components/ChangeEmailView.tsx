@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
-import { AppRoute } from '../types';
+import { AppRoute, UserProfile } from '../types';
 import ViewHeader from './ViewHeader';
 import { Mail, Check } from 'lucide-react';
 
 interface ChangeEmailViewProps {
   navigateTo: (route: AppRoute) => void;
-  userProfile: any;
-  setUserProfile: React.Dispatch<React.SetStateAction<any>>;
+  userProfile: UserProfile;
+  setUserProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
 }
 
 const ChangeEmailView: React.FC<ChangeEmailViewProps> = ({ navigateTo, userProfile, setUserProfile }) => {
   const [email, setEmail] = useState(userProfile.email);
 
   const handleSave = () => {
-    setUserProfile((prev: any) => ({ ...prev, email }));
+    setUserProfile((prev: UserProfile) => ({ ...prev, email }));
     navigateTo(AppRoute.PROFILE_ACCOUNT);
   };
 

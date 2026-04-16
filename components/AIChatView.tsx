@@ -8,12 +8,18 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, ReferenceLine } from 'recharts';
 import ConfirmationModal from './ConfirmationModal';
 
+interface MessageMatrixItem {
+  title: string;
+  importance: number;
+  urgency: number;
+}
+
 interface Message {
   role: 'user' | 'bot';
   text: string;
   type?: 'form_schedule' | 'form_task' | 'form_matrix_confirm' | 'form_matrix_input';
   isSubmitted?: boolean;
-  matrixData?: { title: string; importance: number; urgency: number }[];
+  matrixData?: MessageMatrixItem[];
 }
 
 interface Conversation {
@@ -23,7 +29,7 @@ interface Conversation {
   updatedAt: number;
 }
 
-const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
+const MatrixChart: React.FC<{ data: MessageMatrixItem[] }> = ({ data }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Group tasks by their coordinates to handle overlaps
@@ -50,7 +56,7 @@ const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
     label: group.tasks.length > 1 ? `${group.tasks[0]} 等 ${group.tasks.length} 項` : group.tasks[0]
   }));
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: { tasks: string[], x: number, y: number } }[] }) => {
     if (active && payload && payload.length) {
       const { tasks, x, y } = payload[0].payload;
       return (

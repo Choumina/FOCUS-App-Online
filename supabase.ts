@@ -23,9 +23,10 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export function handleSupabaseError(error: any, operationType: OperationType, path: string | null) {
+export function handleSupabaseError(error: unknown, operationType: OperationType, path: string | null) {
+  const message = error instanceof Error ? error.message : String(error);
   const errInfo = {
-    error: error?.message || String(error),
+    error: message,
     operationType,
     path
   };

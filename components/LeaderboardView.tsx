@@ -26,6 +26,21 @@ interface Player {
   id: string;
 }
 
+interface UserRecord {
+  id: string;
+  user_profile: {
+    name?: string;
+    avatar?: string;
+    level?: number;
+  };
+  points: number;
+  game_data?: {
+    coins?: number;
+    focusMinutes?: number;
+    petLevel?: number;
+  };
+}
+
 const RANK_CATEGORIES: { key: RankCategory; label: string; icon: React.ReactNode; color: string; description: string }[] = [
   { key: 'points',  label: '積分',    icon: <Trophy size={14} />,  color: 'text-yellow-600', description: '總積分排名' },
   { key: 'coins',   label: '金幣',    icon: <Coins size={14} />,   color: 'text-amber-600',  description: '持有金幣排名' },
@@ -58,7 +73,7 @@ const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfi
     }
   };
 
-  const getScoreForCategory = (item: any, cat: RankCategory): { score: number; label: string } => {
+  const getScoreForCategory = (item: UserRecord, cat: RankCategory): { score: number; label: string } => {
     switch (cat) {
       case 'coins':
         return { score: item.game_data?.coins || 0, label: '💰 coins' };

@@ -1,19 +1,12 @@
 import React from 'react';
-import { AppRoute } from '../types';
+import { AppRoute, UserProfile } from '../types';
 import ViewHeader from './ViewHeader';
 import { Mail, Bell, LogOut, Archive, ChevronLeft, Pencil } from 'lucide-react';
-import { UserIdentity } from '../types';
 
 interface ProfileViewProps {
   navigateTo: (route: AppRoute) => void;
   onLogout: () => void;
-  userProfile: {
-    name: string;
-    bio: string;
-    avatar: string;
-    level: number;
-    identity?: UserIdentity;
-  };
+  userProfile: UserProfile;
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ navigateTo, onLogout, userProfile }) => {

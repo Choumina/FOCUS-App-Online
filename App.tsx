@@ -377,7 +377,7 @@ const App: React.FC = () => {
       }
 
     } catch (error) {
-      console.error('Error in fetchUserData:', error);
+      console.error('Error in fetchUserData:', error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoadingData(false);
     }
@@ -474,7 +474,7 @@ const App: React.FC = () => {
   }, [sessionStartTime, timerInterruptionCount, setFocusLogs]);
 
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (timerIsActive && timerTimeLeft > 0) {
       if (!sessionStartTime) setSessionStartTime(new Date().toISOString());
       interval = setInterval(() => {
@@ -523,7 +523,7 @@ const App: React.FC = () => {
         }
       }
     }
-    return () => clearTimeout(interval);
+    return () => clearInterval(interval);
   }, [timerIsActive, timerTimeLeft, timerTotalTime, sessionStartTime, saveFocusLog, appSettings]);
 
   // Handle manual stop/pause logging

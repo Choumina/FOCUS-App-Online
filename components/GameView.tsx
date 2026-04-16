@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AppRoute, Item } from '../types';
+import { AppRoute, Item, PetItem } from '../types';
 import { ChevronLeft, Plus, DollarSign, Sparkles, Heart, ShoppingBag, Layers, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -8,11 +8,8 @@ interface GameViewProps {
   navigateTo: (route: AppRoute) => void;
   coins: number;
   setCoins: React.Dispatch<React.SetStateAction<number>>;
-  placedItems: {
-    id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string,
-    hunger: number, thirst: number, affection: number
-  }[];
-  setPlacedItems: React.Dispatch<React.SetStateAction<any[]>>;
+  placedItems: PetItem[];
+  setPlacedItems: React.Dispatch<React.SetStateAction<PetItem[]>>;
   activeAreas: string[];
   setActiveAreas: React.Dispatch<React.SetStateAction<string[]>>;
   areaNames: Record<string, string>;
@@ -228,7 +225,7 @@ const GameView: React.FC<GameViewProps> = ({
     setPlacedItems(prev => prev.map(p => {
       if (p.id !== id) return p;
       
-      const updates: any = { isReacting: true };
+      const updates: Partial<PetItem> = { isReacting: true };
       if (type === 'hunger') {
         updates.hunger = Math.min(100, p.hunger + 20);
         updates.dailyFood = Math.min(3, (p.dailyFood || 0) + 1);
@@ -562,7 +559,7 @@ const AreaBox: React.FC<AreaBoxProps> = ({ areaId, items, handleEmojiClick, remo
 };
 
 interface EmojiItemProps {
-  item: any;
+  item: PetItem;
   handleEmojiClick: () => void;
 }
 

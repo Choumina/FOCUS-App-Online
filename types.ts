@@ -12,6 +12,15 @@ export interface UserProfile {
   registrationDate: string;
 }
 
+export interface AppSettings {
+  timerEndNotify: boolean;
+  timerWarnTime: number;
+  focusReminder: boolean;
+  focusReminderInterval: number;
+  appBlockerFocus: boolean;
+  appBlockerBreak: boolean;
+}
+
 export interface PetItem {
   id: string;
   x: number;

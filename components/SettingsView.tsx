@@ -1,20 +1,13 @@
 import React, { useState } from 'react';
-import { AppRoute } from '../types';
+import { AppRoute, AppSettings } from '../types';
 import ViewHeader from './ViewHeader';
 import { RotateCcw, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface SettingsViewProps {
   navigateTo: (route: AppRoute) => void;
   onResetTour?: () => void;
-  appSettings: {
-    timerEndNotify: boolean;
-    timerWarnTime: number;
-    focusReminder: boolean;
-    focusReminderInterval: number;
-    appBlockerFocus: boolean;
-    appBlockerBreak: boolean;
-  };
-  setAppSettings: React.Dispatch<React.SetStateAction<any>>;
+  appSettings: AppSettings;
+  setAppSettings: React.Dispatch<React.SetStateAction<AppSettings>>;
   isPremium: boolean;
   setIsPremium: (val: boolean) => void;
 }
@@ -23,8 +16,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
   const [tab, setTab] = useState<'notif' | 'block'>('notif');
   const [tourReset, setTourReset] = useState(false);
 
-  const updateSetting = (key: string, value: any) => {
-    setAppSettings((prev: any) => ({ ...prev, [key]: value }));
+  const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    setAppSettings((prev: AppSettings) => ({ ...prev, [key]: value }));
   };
 
   const handleTimerEndNotifyToggle = () => {
@@ -103,145 +96,89 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, ap
             onClick={() => setTab('block')}
             className={`flex-1 py-3 text-sm font-bold rounded-full transition-all ${tab === 'block' ? 'bg-white shadow-md text-gray-900' : 'text-gray-400'}`}
           >
-            App 封鎖程式
+            App 封鎖
           </button>
         </div>
 
-        <div className="space-y-8">
-          {tab === 'notif' ? (
-            <>
-              <div>
-                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">計時器設定</h3>
-                <Toggle 
-                  label="計時器結束時通知我" 
-                  value={appSettings.timerEndNotify} 
-                  onToggle={handleTimerEndNotifyToggle} 
-                />
-                <NumberSelector 
-                  label="即將結束時長" 
-                  unit="分" 
-                  value={appSettings.timerWarnTime} 
-                  onChange={(val) => updateSetting('timerWarnTime', val)} 
-                />
-                <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">可用來協助你準備開始休息或開始下一個番茄鐘。</p>
-              </div>
+        {tab === 'notif' ? (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 ml-2">計時器與提醒</h3>
+            <Toggle 
+              label="專注完成通知" 
+              value={appSettings.timerEndNotify} 
+              onToggle={handleTimerEndNotifyToggle} 
+            />
+            <NumberSelector 
+              label="專注結束前提醒 (分鐘)" 
+              value={appSettings.timerWarnTime} 
+              onChange={(val) => updateSetting('timerWarnTime', val)} 
+              unit="m" 
+            />
+            <Toggle 
+              label="定期專注提醒" 
+              value={appSettings.focusReminder} 
+              onToggle={handleFocusReminderToggle} 
+            />
+            {appSettings.focusReminder && (
+              <NumberSelector 
+                label="提醒間隔" 
+                value={appSettings.focusReminderInterval} 
+                onChange={(val) => updateSetting('focusReminderInterval', val)} 
+                unit="m" 
+              />
+            )}
+          </div>
+        ) : (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+             <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100 mb-6">
+                <p className="text-xs text-indigo-600 font-bold leading-relaxed">
+                   開啟「App 封鎖」功能後，當你在專注模式時，FOCUS AI 會協助你過濾社群媒體的通知。
+                </p>
+             </div>
+             <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 ml-2">封鎖設定</h3>
+             <Toggle 
+               label="專注時封鎖社交 App" 
+               value={appSettings.appBlockerFocus} 
+               onToggle={() => updateSetting('appBlockerFocus', !appSettings.appBlockerFocus)} 
+             />
+             <Toggle 
+               label="休息時解除封鎖" 
+               value={appSettings.appBlockerBreak} 
+               onToggle={() => updateSetting('appBlockerBreak', !appSettings.appBlockerBreak)} 
+             />
+          </div>
+        )}
 
-              <div>
-                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">專注提醒</h3>
-                <Toggle 
-                  label="啟用番茄鐘專注提醒" 
-                  value={appSettings.focusReminder} 
-                  onToggle={handleFocusReminderToggle} 
-                />
-                <NumberSelector 
-                  label="提醒頻率" 
-                  unit="分" 
-                  value={appSettings.focusReminderInterval} 
-                  onChange={(val) => updateSetting('focusReminderInterval', val)} 
-                />
-                <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">專注提醒會在每隔設定時間後發出系統通知，提醒你保持專注。</p>
+        <div className="mt-8">
+           <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4 ml-2">實驗性功能</h3>
+           <div 
+             onClick={handleResetTour}
+             className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 mb-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all"
+           >
+             <div className="flex items-center gap-3">
+                <RotateCcw size={18} className={`text-indigo-500 ${tourReset ? 'animate-spin' : ''}`} />
+                <span className="text-sm font-bold text-gray-700">重設功能導覽</span>
+             </div>
+             {tourReset ? <span className="text-[10px] font-bold text-green-500">Done!</span> : <ChevronRight size={18} className="text-gray-300" />}
+           </div>
 
-                {/* Permission Status Badge */}
-                {'Notification' in window && (
-                  <div className={`mt-3 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
-                    Notification.permission === 'granted' ? 'bg-green-50 text-green-600' :
-                    Notification.permission === 'denied' ? 'bg-red-50 text-red-500' :
-                    'bg-yellow-50 text-yellow-600'
-                  }`}>
-                    <span>{Notification.permission === 'granted' ? '✅' : Notification.permission === 'denied' ? '🚫' : '⚠️'}</span>
-                    <span>{
-                      Notification.permission === 'granted' ? '通知權限已授予' :
-                      Notification.permission === 'denied' ? '通知已被封鎖，請至瀏覽器設定手動開啟' :
-                      '尚未授予通知權限'
-                    }</span>
-                  </div>
-                )}
-              </div>
-
-              {/* 導覽重置 */}
-              <div>
-                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">幫助與導覽</h3>
-                <button
-                  onClick={handleResetTour}
-                  disabled={tourReset}
-                  className="w-full flex items-center justify-between bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:bg-indigo-50 active:scale-95 transition-all disabled:opacity-60 mb-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                      <RotateCcw size={17} className="text-indigo-500" />
-                    </div>
-                    <div className="text-left">
-                      <p className="text-sm font-bold text-gray-700">
-                        {tourReset ? '已重置，返回首頁即可觀看 ✓' : '重新觀看功能導覽'}
-                      </p>
-                      <p className="text-[11px] text-gray-400 font-medium">以氣泡方式逐一介紹各功能</p>
-                    </div>
-                  </div>
-                  <ChevronRight size={18} className="text-gray-300" />
-                </button>
-              </div>
-
-              {/* 方案管理 */}
-              <div>
-                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">方案管理</h3>
-                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                   <div className="flex items-start justify-between mb-6">
-                      <div>
-                         <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">目前方案</p>
-                         <h4 className={`text-xl font-black ${isPremium ? 'text-indigo-600' : 'text-gray-800'}`}>
-                           {isPremium ? 'Premium 尊享版' : 'Regular 普通版'}
-                         </h4>
-                      </div>
-                      <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${isPremium ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
-                         {isPremium ? 'ACTIVE' : 'FREE'}
-                      </div>
-                   </div>
-                   
-                   <p className="text-xs text-gray-400 font-medium leading-relaxed mb-6">
-                      {isPremium 
-                        ? '您目前享有無限次數據分析、無廣告 AI 助理與極速連線體驗。' 
-                        : '普通版使用者僅能查看一次數據分析報告，且包含 AI 廣告。'}
-                   </p>
-
-                   <button
-                     onClick={() => setIsPremium(!isPremium)}
-                     className={`w-full py-4 rounded-2xl font-black text-sm transition-all active:scale-95 shadow-lg ${
-                       isPremium 
-                       ? 'bg-gray-100 text-gray-600' 
-                       : 'bg-gradient-to-r from-indigo-500 to-blue-600 text-white shadow-indigo-100'
-                     }`}
-                   >
-                     {isPremium ? '切換回普通版' : '立即升級為 Premium'}
-                   </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="space-y-6">
-               <div>
-                  <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider font-black">專注時段 (Focus)</h3>
-                  <Toggle 
-                    label="開啟嚴格 App 封鎖" 
-                    value={appSettings.appBlockerFocus} 
-                    onToggle={() => updateSetting('appBlockerFocus', !appSettings.appBlockerFocus)} 
-                  />
-                  <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">開啟後，在專注期間將無法切換至其他娛樂頁面，直到計時結束。</p>
-               </div>
-               <div>
-                  <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider font-black">休息時段 (Break)</h3>
-                  <Toggle 
-                    label="休息時限制娛樂 App" 
-                    value={appSettings.appBlockerBreak} 
-                    onToggle={() => updateSetting('appBlockerBreak', !appSettings.appBlockerBreak)} 
-                  />
-                  <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">若您希望在休息時也能保持數位排毒，可以開啟此功能。</p>
-               </div>
-               <button className="w-full py-5 bg-white text-gray-400 rounded-3xl font-black text-xs shadow-sm border border-gray-100 uppercase tracking-widest active:scale-95 transition-all">
-                 刷新封鎖引擎狀態
-               </button>
-            </div>
-          )}
+           <div 
+             onClick={() => setIsPremium(!isPremium)}
+             className={`flex justify-between items-center p-4 rounded-3xl border mb-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all ${isPremium ? 'bg-indigo-50 border-indigo-200' : 'bg-white border-gray-100'}`}
+           >
+             <div className="flex items-center gap-3">
+                <span className="text-lg">💎</span>
+                <span className={`text-sm font-bold ${isPremium ? 'text-indigo-600' : 'text-gray-700'}`}>進階版功能 (Premium)</span>
+             </div>
+             <div className={`w-12 h-6 rounded-full transition-colors relative ${isPremium ? 'bg-indigo-500' : 'bg-gray-300'}`}>
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isPremium ? 'left-7' : 'left-1'}`} />
+             </div>
+           </div>
         </div>
+
+        <p className="text-center text-[10px] text-gray-300 font-bold mt-12 uppercase tracking-widest">
+           Focus AI v3.0.4 • (c) 2026
+        </p>
       </div>
     </div>
   );
