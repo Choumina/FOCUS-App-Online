@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppRoute } from '../types';
-import { ChevronLeft, Play, QrCode, Zap, Trophy, Flag, Coins, Star, Target } from 'lucide-react';
+import { ChevronLeft, Play, QrCode, Zap, Flag, Coins, Star, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface RaceTrackViewProps {
@@ -129,49 +129,57 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
              <div className="text-[10px] font-black uppercase tracking-widest writing-mode-vertical" style={{ writingMode: 'vertical-rl' }}>Goal</div>
           </div>
           
-          <div className="space-y-10 relative z-10">
-            {[1, 2, 3, 4, 5].map((h, i) => (
-              <div key={h} className="relative h-3 bg-gray-200/50 rounded-full backdrop-blur-sm">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${positions[i]}%` }}
-                  className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.5)]" 
-                />
-                
-                {/* Horse with Gallop Animation */}
-                <motion.div 
-                  animate={racing ? {
-                    y: [0, -10, 0],
-                    rotate: [-10, 10, -10],
-                    scaleX: -1
-                  } : { scaleX: -1 }}
-                  transition={racing ? {
-                    y: { repeat: Infinity, duration: 0.3 },
-                    rotate: { repeat: Infinity, duration: 0.3 }
-                  } : {}}
-                  className="absolute -top-7 text-5xl transition-all duration-100 ease-linear drop-shadow-lg"
-                  style={{ left: `calc(${positions[i]}% - 25px)` }}
-                >
-                  🏇
-                </motion.div>
+          <div className="flex gap-4 relative z-10">
+            {/* Race Tracks Column */}
+            <div className="flex-1 space-y-10">
+              {[1, 2, 3, 4, 5].map((h, i) => (
+                <div key={h} className="relative h-4 bg-gray-200/50 rounded-full backdrop-blur-sm border border-white/10">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${positions[i]}%` }}
+                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full shadow-[0_0_15px_rgba(52,211,153,0.5)]" 
+                  />
+                  
+                  {/* Horse with Gallop Animation */}
+                  <motion.div 
+                    animate={racing ? {
+                      y: [0, -12, 0],
+                      rotate: [-15, 15, -15],
+                      scaleX: -1
+                    } : { scaleX: -1 }}
+                    transition={racing ? {
+                      y: { repeat: Infinity, duration: 0.25 },
+                      rotate: { repeat: Infinity, duration: 0.25 }
+                    } : {}}
+                    className="absolute -top-8 text-5xl transition-all duration-100 ease-linear drop-shadow-lg z-20"
+                    style={{ left: `calc(${positions[i]}% - 25px)` }}
+                  >
+                    🏇
+                  </motion.div>
+  
+                  {/* Horse Number Label */}
+                  <div className="absolute -left-8 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400">0{h}</div>
+                </div>
+              ))}
+            </div>
 
-                {/* Horse Number Label */}
-                <div className="absolute -left-8 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400">0{h}</div>
-
-                {/* Betting Marker for Horse */}
+            {/* Betting Sidebar Column - Decoupled from Track for clean UX */}
+            <div className="w-16 flex flex-col justify-between py-0 space-y-10">
+              {[0, 1, 2, 3, 4].map((i) => (
                 <button
+                  key={i}
                   onClick={() => !racing && setSelectedHorse(i)}
-                  className={`absolute -right-12 -top-3 w-9 h-9 rounded-2xl flex items-center justify-center transition-all border-2 ${
+                  className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all border-2 relative z-30 ${
                     selectedHorse === i 
-                      ? 'bg-emerald-500 border-white text-white scale-110 shadow-xl rotate-12' 
-                      : 'bg-white border-gray-100 text-gray-300 hover:bg-emerald-50 hover:border-emerald-200'
+                      ? 'bg-emerald-500 border-white text-white scale-110 shadow-[0_0_20px_rgba(16,185,129,0.4)] rotate-6' 
+                      : 'bg-white border-gray-100 text-gray-400 hover:bg-emerald-50 hover:border-emerald-200'
                   }`}
                   disabled={racing}
                 >
-                   {selectedHorse === i ? <Star size={18} fill="white" /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-300" />}
+                   {selectedHorse === i ? <Star size={20} fill="white" /> : <span className="text-xs font-black">P{i+1}</span>}
                 </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppRoute, Task, CalendarEvent, FocusLog, UserIdentity } from './types';
-import { Plus, Loader2, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { supabase, handleSupabaseError, OperationType } from './supabase';
 import { User } from '@supabase/supabase-js';
 import ConfirmationModal from './components/ConfirmationModal';
@@ -25,52 +25,11 @@ import GameNavigation from './components/GameNavigation';
 import LoginView from './components/LoginView';
 import OnboardingView from './components/OnboardingView';
 import FeatureTour from './components/FeatureTour';
+import { tourSteps } from './config/tourSteps';
 import FocusAnalysisView from './components/FocusAnalysisView';
 import CalendarAdminView from './components/CalendarAdminView';
-import { ErrorBoundary } from './components/ErrorBoundary';
 
-const tourSteps = [
-  {
-    targetId: 'home-profile',
-    title: '個人中心',
-    content: '這裡是你的個人中心，點擊頭像可以進入帳號設定、查看等級與積分紀錄。'
-  },
-  {
-    targetId: 'home-tasks',
-    title: '提醒事項',
-    content: '你最近的待辦任務會顯示在這裡，點擊卡片可以查看完整的任務清單。'
-  },
-  {
-    targetId: 'home-timer',
-    title: '番茄鐘',
-    content: '想要開始一段專注時光嗎？點擊番茄鐘卡片進入專注計時器。'
-  },
-  {
-    targetId: 'home-calendar',
-    title: '行事曆',
-    content: '這裡是你的月曆檢視，可以查看每天的行程安排與 AI 建議的學習進度。'
-  },
-  {
-    targetId: 'home-games-area',
-    title: '遊戲專區',
-    content: '向下滾動即可看到遊戲專區！你可以在這裡與寵物互動、參加賽馬或查看积分排行榜。'
-  },
-  {
-    targetId: 'nav-focus',
-    title: 'Focus 核心',
-    content: '底部選單可以隨時切換功能。這個按鈕會帶你回到目前的主頁面。'
-  },
-  {
-    targetId: 'nav-game',
-    title: '遊戲世界',
-    content: '想休息一下？點擊這裡進入寵物空間，可以佈置你的房間或參加賽馬。'
-  },
-  {
-    targetId: 'nav-ai',
-    title: 'AI 助手',
-    content: '這是你的學術夥伴！讓 AI 幫你拆解複雜任務、分析進度，助你一臂之力。'
-  }
-];
+// Tour steps are now imported from config/tourSteps.ts
 
 const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(AppRoute.HOME);
@@ -80,10 +39,10 @@ const App: React.FC = () => {
   const [isTourVisible, setIsTourVisible] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
-  
+
   // Persistence initialization
   const [coins, _setCoins] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -106,15 +65,22 @@ const App: React.FC = () => {
     registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
   });
   const [lastBetAmount, setLastBetAmount] = useState(100);
-  const [placedItems, setPlacedItems] = useState<{id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string}[]>([
-    { id: 'start1', x: 50, y: 50, char: '🦦', isReacting: false, clickCount: 0, areaId: 'blue' },
-    { id: 'start2', x: 20, y: 30, char: '📺', isReacting: false, clickCount: 0, areaId: 'blue' },
-    { id: 'start3', x: 70, y: 20, char: '🧸', isReacting: false, clickCount: 0, areaId: 'blue' },
-    { id: 'env1', x: 15, y: 85, char: '🚽', isReacting: false, clickCount: 0, areaId: 'blue' },
-    { id: 'env2', x: 35, y: 85, char: '🛁', isReacting: false, clickCount: 0, areaId: 'blue' },
-    { id: 'env3', x: 85, y: 80, char: '🚪', isReacting: false, clickCount: 0, areaId: 'blue' },
-    { id: 'env4', x: 80, y: 20, char: '🖼️', isReacting: false, clickCount: 0, areaId: 'blue' },
-  ]);
+  const [placedItems, setPlacedItems] = useState<{ id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string }[]>([]);
+  const [visibleSubSections, setVisibleSubSections] = useState<Record<string, string[]>>({
+    focus: ['tasks', 'timer', 'analysis'],
+    calendar: ['calendar_card'],
+    games: ['pets', 'race', 'ranking']
+  });
+
+  // Timer States (Shared across Home & Focus)
+  const [timerTotalTime, setTimerTotalTime] = useState(2400);
+  const [timerTimeLeft, setTimerTimeLeft] = useState(2400);
+  const [timerIsActive, setTimerIsActive] = useState(false);
+  const [timerIsStrict, setTimerIsStrict] = useState(false);
+  const [timerInterruptionCount, setTimerInterruptionCount] = useState(0);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
 
   const lastFetchedUserId = React.useRef<string | null>(null);
 
@@ -133,7 +99,7 @@ const App: React.FC = () => {
     // 1. Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       const isSignupVerification = window.location.hash.includes('type=signup');
-      
+
       if (isSignupVerification && session?.user) {
         // 使用者點擊 email 驗證信，Supabase 預設會自動登入
         // 為了符合使用者的預期（進入登入畫面手動輸入），這裡強制登出
@@ -157,7 +123,7 @@ const App: React.FC = () => {
     // 2. Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const isSignupVerification = window.location.hash.includes('type=signup');
-      
+
       if (isSignupVerification && session?.user) {
         await supabase.auth.signOut();
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -180,23 +146,26 @@ const App: React.FC = () => {
 
   // Set tour visible after onboarding is cleared and user is on Home page
   useEffect(() => {
-    // Only trigger if all conditions are met and we haven't already shown it
-    const shouldShowTour = 
-      user && 
-      hasCompletedOnboarding === true && 
-      hasCompletedTour === false && 
-      currentRoute === AppRoute.HOME && 
-      !isTourVisible &&
+    // Only trigger if important conditions change
+    const canShow =
+      user &&
+      hasCompletedOnboarding === true &&
+      hasCompletedTour === false &&
+      currentRoute === AppRoute.HOME &&
       !isInitializing;
 
-    if (shouldShowTour) {
-      // Use a shorter delay and ensure it's not reset by every render
+    if (canShow && !isTourVisible) {
+      console.log('Tour criteria met, starting delay...');
       const timer = setTimeout(() => {
+        console.log('Setting isTourVisible to true');
         setIsTourVisible(true);
-      }, 800); 
+      }, 1500);
       return () => clearTimeout(timer);
+    } else if (isTourVisible && !canShow) {
+      console.log('Tour condition no longer met, hiding tour');
+      setIsTourVisible(false);
     }
-  }, [user?.id, hasCompletedOnboarding, hasCompletedTour, currentRoute, isTourVisible, isInitializing]);
+  }, [hasCompletedOnboarding, hasCompletedTour, currentRoute, isInitializing, isTourVisible, user]);
 
   const fetchUserData = async (authUser: User) => {
     console.log('Fetching data for user:', authUser.id);
@@ -249,15 +218,18 @@ const App: React.FC = () => {
           storedMeta._tourDone === true ||
           localTourDone;
 
+        console.log('App Data Sync - Onboarding:', onboardingDone, '(DB:', !!data.has_completed_onboarding, 'JSON:', !!storedMeta._onboardingDone, 'Local:', !!localOnboardingDone, ')');
+        console.log('App Data Sync - Tour:', tourDone, '(DB:', !!data.has_completed_tour, 'JSON:', !!storedMeta._tourDone, 'Local:', !!localOnboardingDone, ')');
+
         setHasCompletedOnboarding(onboardingDone);
         setHasCompletedTour(tourDone);
 
         // 若 DB 欄位存在但和本地不一致，修復 DB 欄位
         if (onboardingDone && !data.has_completed_onboarding) {
-          supabase.from('users').update({ has_completed_onboarding: true }).eq('id', authUser.id).then(() => {});
+          supabase.from('users').update({ has_completed_onboarding: true, updated_at: new Date().toISOString() }).eq('id', authUser.id).then(() => { });
         }
         if (tourDone && !data.has_completed_tour) {
-          supabase.from('users').update({ has_completed_tour: true }).eq('id', authUser.id).then(() => {});
+          supabase.from('users').update({ has_completed_tour: true, updated_at: new Date().toISOString() }).eq('id', authUser.id).then(() => { });
         }
 
 
@@ -265,7 +237,9 @@ const App: React.FC = () => {
         if (data.tasks) setTasks(data.tasks);
         if (data.home_config) setHomeSections(data.home_config);
         if (data.placed_items) setPlacedItems(data.placed_items);
+        if (storedMeta._visibleSubSections) setVisibleSubSections(storedMeta._visibleSubSections);
         if (data.focus_logs) setFocusLogs(data.focus_logs);
+        else if (storedMeta._focusLogs) setFocusLogs(storedMeta._focusLogs);
 
         // ── 個人資料同步 ─────────────────────────────────────────────────
         const storedProfile = data.user_profile || {};
@@ -308,15 +282,8 @@ const App: React.FC = () => {
           email: authEmail,
           points: 0,
           home_config: ['focus', 'calendar', 'games'],
-          placed_items: [
-            { id: 'start2', x: 20, y: 30, char: '📺', isReacting: false, clickCount: 0, areaId: 'blue' },
-            { id: 'env1', x: 15, y: 85, char: '🚽', isReacting: false, clickCount: 0, areaId: 'blue' },
-            { id: 'env2', x: 35, y: 85, char: '🛁', isReacting: false, clickCount: 0, areaId: 'blue' },
-            { id: 'env3', x: 85, y: 80, char: '🚪', isReacting: false, clickCount: 0, areaId: 'blue' },
-            { id: 'env4', x: 80, y: 20, char: '🖼️', isReacting: false, clickCount: 0, areaId: 'blue' },
-          ],
+          placed_items: [],
           tasks: [],
-          auth_provider: authUser.app_metadata?.provider || 'email',
           user_profile: {
             ...userProfile,
             name: authName,
@@ -324,9 +291,15 @@ const App: React.FC = () => {
             avatar: authAvatar || userProfile.avatar,
             _onboardingDone: false,
             _tourDone: false,
+            _authProvider: authUser.app_metadata?.provider || 'email',
+            _focusLogs: [],
+            _visibleSubSections: {
+              focus: ['tasks', 'timer', 'analysis'],
+              calendar: ['calendar_card'],
+              games: ['pets', 'race', 'ranking']
+            },
             registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
-          },
-          focus_logs: []
+          }
         };
 
         const { error: upsertError } = await supabase.from('users').upsert(initialData, { onConflict: 'id' });
@@ -336,9 +309,13 @@ const App: React.FC = () => {
         } else {
           // 成功後，才嘗試更新 has_completed_onboarding/tour 欄位（可選，若欄位不存在也沒關係）
           supabase.from('users')
-            .update({ has_completed_onboarding: false, has_completed_tour: false })
+            .update({
+              has_completed_onboarding: false,
+              has_completed_tour: false,
+              updated_at: new Date().toISOString()
+            })
             .eq('id', authUser.id)
-            .then(() => {}, () => {}); // 欄位不存在時靜默忽略
+            .then(() => { }, () => { }); // 欄位不存在時靜默忽略
         }
 
         setTasks([]);
@@ -366,11 +343,18 @@ const App: React.FC = () => {
           tasks: tasks,
           home_config: homeSections,
           placed_items: placedItems,
-          user_profile: userProfile,
-          focus_logs: focusLogs,
-          auth_provider: user.app_metadata.provider || 'email'
+          // 加入 updated_at 以嘗試修復 Supabase Trigger 錯誤 "record new has no field updated_at"
+          updated_at: new Date().toISOString(),
+          user_profile: {
+            ...userProfile,
+            _authProvider: user.app_metadata?.provider || 'email',
+            _focusLogs: focusLogs,
+            _visibleSubSections: visibleSubSections,
+            _onboardingDone: hasCompletedOnboarding,
+            _tourDone: hasCompletedTour
+          }
         }).eq('id', user.id);
-        
+
         if (error) {
           console.error('Sync failed:', error.message);
         }
@@ -380,7 +364,7 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(syncData, 2000); // Debounce sync
     return () => clearTimeout(timer);
-  }, [coins, tasks, homeSections, placedItems, userProfile, focusLogs, user, isLoadingData]);
+  }, [coins, tasks, homeSections, placedItems, userProfile, focusLogs, user, isLoadingData, visibleSubSections]);
 
   const MAX_COINS = 9999;
 
@@ -391,11 +375,7 @@ const App: React.FC = () => {
     });
   };
 
-  const [timerTotalTime, setTimerTotalTime] = useState(2400);
-  const [timerTimeLeft, setTimerTimeLeft] = useState(2400);
-  const [timerIsActive, setTimerIsActive] = useState(false);
-  
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+
 
   const mainRef = React.useRef<HTMLElement>(null);
 
@@ -406,7 +386,7 @@ const App: React.FC = () => {
       }
       window.scrollTo(0, 0);
     };
-    
+
     resetScroll();
     // Use requestAnimationFrame and setTimeout to ensure scroll is reset after all renders and dnd-kit cleanups
     requestAnimationFrame(resetScroll);
@@ -425,7 +405,7 @@ const App: React.FC = () => {
       setCoins(c => c + 500);
       alert("太棒了！專注時段已結束。");
     }
-    return () => clearInterval(interval);
+    return () => clearTimeout(interval);
   }, [timerIsActive, timerTimeLeft]);
 
   const navigateTo = (route: AppRoute) => {
@@ -439,8 +419,6 @@ const App: React.FC = () => {
   // Level up logic
   useEffect(() => {
     const checkLevelUp = () => {
-      let canLevelUp = false;
-      
       // Condition 1: 10+ emojis
       const emojiCount = placedItems.filter(item => !['📺', '🚽', '🛁', '🚪', '🖼️'].includes(item.char)).length;
       const has10Emojis = emojiCount >= 10;
@@ -450,22 +428,23 @@ const App: React.FC = () => {
 
       // Condition 3: Visited all main routes (as a proxy for "clicked every button")
       const mainRoutes = [
-        AppRoute.HOME, AppRoute.FOCUS_TIMER, AppRoute.TASKS, 
-        AppRoute.GAME_PETS, AppRoute.GAME_RACE, AppRoute.LEADERBOARD, 
-        AppRoute.SETTINGS, AppRoute.AI_CHAT, AppRoute.CALENDAR_DETAIL, 
+        AppRoute.HOME, AppRoute.FOCUS_TIMER, AppRoute.TASKS,
+        AppRoute.GAME_PETS, AppRoute.GAME_RACE, AppRoute.LEADERBOARD,
+        AppRoute.SETTINGS, AppRoute.AI_CHAT, AppRoute.CALENDAR_DETAIL,
         AppRoute.PROFILE, AppRoute.PROFILE_ACCOUNT
       ];
       const hasVisitedAll = mainRoutes.every(r => userProfile.visitedRoutes.includes(r));
 
-      if (has10Emojis || has2Wins || hasVisitedAll) {
+      // Determine target level based on milestones reached
+      const milestonesReached = (has10Emojis ? 1 : 0) + (has2Wins ? 1 : 0) + (hasVisitedAll ? 1 : 0);
+
+      if (milestonesReached > userProfile.level) {
         setUserProfile(prev => ({
           ...prev,
-          level: prev.level + 1,
+          level: milestonesReached,
           winsTowardsNextLevel: has2Wins ? 0 : prev.winsTowardsNextLevel,
-          // We don't reset visitedRoutes or emojiCount as they are cumulative/state-based
-          // but for wins we reset as requested "升級後記得重新計算"
         }));
-        alert(`恭喜！你升到了 Lv.${userProfile.level + 1}`);
+        alert(`恭喜！你升到了 Lv.${milestonesReached}`);
       }
     };
 
@@ -473,8 +452,7 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [placedItems, userProfile.winsTowardsNextLevel, userProfile.visitedRoutes]);
 
-  const [isAddingTask, setIsAddingTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
+
 
   const toggleTask = (id: string) => {
     setTasks(prev => {
@@ -500,34 +478,54 @@ const App: React.FC = () => {
   const renderView = () => {
     switch (currentRoute) {
       case AppRoute.HOME:
-        return <HomeView navigateTo={navigateTo} tasks={tasks} setTasks={setTasks} toggleTask={toggleTask} archiveTask={archiveTask} calendarEvents={calendarEvents} sections={homeSections} setSections={setHomeSections} userProfile={userProfile} />;
+        return <HomeView
+          navigateTo={navigateTo}
+          tasks={tasks}
+          setTasks={setTasks}
+          toggleTask={toggleTask}
+          archiveTask={archiveTask}
+          calendarEvents={calendarEvents}
+          sections={homeSections}
+          setSections={setHomeSections}
+          visibleSubSections={visibleSubSections}
+          setVisibleSubSections={setVisibleSubSections}
+          userProfile={userProfile}
+          focusLogs={focusLogs}
+          isTourVisible={isTourVisible}
+          timerTimeLeft={timerTimeLeft}
+          timerTotalTime={timerTotalTime}
+        />;
       case AppRoute.FOCUS_TIMER:
-        return <FocusTimerView 
-          navigateTo={navigateTo} 
+        return <FocusTimerView
+          navigateTo={navigateTo}
           totalTime={timerTotalTime}
           setTotalTime={setTimerTotalTime}
           timeLeft={timerTimeLeft}
           setTimeLeft={setTimerTimeLeft}
           isActive={timerIsActive}
           setIsActive={setTimerIsActive}
+          isStrict={timerIsStrict}
+          setIsStrict={setTimerIsStrict}
+          interruptionCount={timerInterruptionCount}
+          setInterruptionCount={setTimerInterruptionCount}
         />;
       case AppRoute.TASKS:
-        return <TasksView 
-          navigateTo={navigateTo} 
-          tasks={tasks} 
-          setTasks={setTasks} 
-          toggleTask={toggleTask} 
-          archiveTask={archiveTask} 
+        return <TasksView
+          navigateTo={navigateTo}
+          tasks={tasks}
+          setTasks={setTasks}
+          toggleTask={toggleTask}
+          archiveTask={archiveTask}
           isAdding={isAddingTask}
           setIsAdding={setIsAddingTask}
           newTitle={newTaskTitle}
           setNewTitle={setNewTaskTitle}
         />;
       case AppRoute.GAME_PETS:
-        return <GameView 
-          navigateTo={navigateTo} 
-          coins={coins} 
-          setCoins={setCoins} 
+        return <GameView
+          navigateTo={navigateTo}
+          coins={coins}
+          setCoins={setCoins}
           placedItems={placedItems}
           setPlacedItems={setPlacedItems}
           activeAreas={activeAreas}
@@ -540,12 +538,12 @@ const App: React.FC = () => {
           setAreaNames={setAreaNames}
         />;
       case AppRoute.GAME_RACE:
-        return <RaceTrackView 
-          navigateTo={navigateTo} 
-          coins={coins} 
-          setCoins={setCoins} 
-          lastBetAmount={lastBetAmount} 
-          setLastBetAmount={setLastBetAmount} 
+        return <RaceTrackView
+          navigateTo={navigateTo}
+          coins={coins}
+          setCoins={setCoins}
+          lastBetAmount={lastBetAmount}
+          setLastBetAmount={setLastBetAmount}
           setUserProfile={setUserProfile}
         />;
       case AppRoute.LEADERBOARD:
@@ -555,10 +553,10 @@ const App: React.FC = () => {
       case AppRoute.AI_CHAT:
         return <AIChatView navigateTo={navigateTo} setCalendarEvents={setCalendarEvents} tasks={tasks} />;
       case AppRoute.CALENDAR_DETAIL:
-        return <CalendarDetailView 
-          navigateTo={navigateTo} 
-          events={calendarEvents} 
-          setEvents={setCalendarEvents} 
+        return <CalendarDetailView
+          navigateTo={navigateTo}
+          events={calendarEvents}
+          setEvents={setCalendarEvents}
         />;
       case AppRoute.PROFILE:
         return <ProfileView navigateTo={navigateTo} onLogout={handleLogout} userProfile={userProfile} />;
@@ -579,14 +577,30 @@ const App: React.FC = () => {
       case AppRoute.CALENDAR_ADMIN:
         return <CalendarAdminView navigateTo={navigateTo} events={calendarEvents} setEvents={setCalendarEvents} />;
       default:
-        return <HomeView navigateTo={navigateTo} tasks={tasks} setTasks={setTasks} toggleTask={toggleTask} archiveTask={archiveTask} calendarEvents={calendarEvents} sections={homeSections} setSections={setHomeSections} userProfile={userProfile} focusLogs={focusLogs} />;
+        return <HomeView
+          navigateTo={navigateTo}
+          tasks={tasks}
+          setTasks={setTasks}
+          toggleTask={toggleTask}
+          archiveTask={archiveTask}
+          calendarEvents={calendarEvents}
+          sections={homeSections}
+          setSections={setHomeSections}
+          visibleSubSections={visibleSubSections}
+          setVisibleSubSections={setVisibleSubSections}
+          userProfile={userProfile}
+          focusLogs={focusLogs}
+          isTourVisible={isTourVisible}
+          timerTimeLeft={timerTimeLeft}
+          timerTotalTime={timerTotalTime}
+        />;
     }
   };
 
   const renderFAB = () => {
     if (currentRoute === AppRoute.TASKS) {
       return (
-        <button 
+        <button
           onClick={() => setIsAddingTask(true)}
           className="w-14 h-14 bg-blue-500 text-white rounded-full shadow-2xl flex items-center justify-center transform transition-all hover:scale-110 active:scale-95 border-4 border-white"
         >
@@ -596,7 +610,7 @@ const App: React.FC = () => {
     }
     if (currentRoute === AppRoute.CALENDAR_DETAIL) {
       return (
-        <button 
+        <button
           onClick={() => window.dispatchEvent(new CustomEvent('calendar-add-event'))}
           className="w-14 h-14 bg-red-500 text-white rounded-full shadow-2xl flex items-center justify-center transform transition-all hover:scale-110 active:scale-95 border-4 border-white"
         >
@@ -613,10 +627,14 @@ const App: React.FC = () => {
       localStorage.setItem(`focus_onboarding_${user.id}`, 'true');
       setUserProfile(prev => ({ ...prev, _onboardingDone: true }));
 
+      // Explicitly go to HOME to start the tour
+      navigateTo(AppRoute.HOME);
+
       // Step 1: 先儲存 user_profile JSON（最關鍵，不依賴額外欄位）
       try {
         await supabase.from('users').update({
-          user_profile: { ...userProfile, _onboardingDone: true }
+          user_profile: { ...userProfile, _onboardingDone: true },
+          updated_at: new Date().toISOString()
         }).eq('id', user.id);
       } catch (e) {
         console.error('Failed to save _onboardingDone to user_profile:', e);
@@ -624,9 +642,11 @@ const App: React.FC = () => {
 
       // Step 2: 嘗試更新 has_completed_onboarding 欄位（若欄位不存在也沒關係）
       supabase.from('users')
-        .update({ has_completed_onboarding: true })
+        .update({ has_completed_onboarding: true, updated_at: new Date().toISOString() })
         .eq('id', user.id)
-        .then(() => {}, () => {});
+        .then(() => { }, () => { });
+    } else {
+      navigateTo(AppRoute.HOME);
     }
   };
 
@@ -645,7 +665,8 @@ const App: React.FC = () => {
       // Step 1: 先儲存 user_profile JSON
       try {
         await supabase.from('users').update({
-          user_profile: { ...userProfile, _tourDone: true }
+          user_profile: { ...userProfile, _tourDone: true },
+          updated_at: new Date().toISOString()
         }).eq('id', user.id);
       } catch (e) {
         console.error('Failed to save _tourDone to user_profile:', e);
@@ -653,9 +674,9 @@ const App: React.FC = () => {
 
       // Step 2: 嘗試更新 has_completed_tour 欄位
       supabase.from('users')
-        .update({ has_completed_tour: true })
+        .update({ has_completed_tour: true, updated_at: new Date().toISOString() })
         .eq('id', user.id)
-        .then(() => {}, () => {});
+        .then(() => { }, () => { });
     }
   };
 
@@ -668,10 +689,24 @@ const App: React.FC = () => {
       setUserProfile(prev => ({ ...prev, _tourDone: false }));
       supabase.from('users').update({
         has_completed_tour: false,
+        updated_at: new Date().toISOString(),
         user_profile: { ...userProfile, _tourDone: false }
-      }).eq('id', user.id).then(() => {}, () => {});
+      }).eq('id', user.id).then(() => {
+        // Force re-trigger check
+        setTimeout(() => {
+          navigateTo(AppRoute.HOME);
+          // Small delay to ensure state propagates then show tour
+          setTimeout(() => setIsTourVisible(true), 500);
+        }, 100);
+      }, (err) => {
+        console.error("Reset tour sync failed:", err);
+        navigateTo(AppRoute.HOME);
+        setTimeout(() => setIsTourVisible(true), 500);
+      });
+    } else {
+      navigateTo(AppRoute.HOME);
+      setTimeout(() => setIsTourVisible(true), 500);
     }
-    navigateTo(AppRoute.HOME);
   };
 
   const handleLogout = async () => {
@@ -679,21 +714,13 @@ const App: React.FC = () => {
     try {
       setIsLoadingData(true);
       await supabase.auth.signOut();
-      
+
       // Reset local states to default values
       _setCoins(0);
       setTasks([]);
       setArchivedTasks([]);
       setHomeSections(['focus', 'calendar', 'games']);
-      setPlacedItems([
-        { id: 'start1', x: 50, y: 50, char: '🦦', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'start2', x: 20, y: 30, char: '📺', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'start3', x: 70, y: 20, char: '🧸', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env1', x: 15, y: 85, char: '🚽', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env2', x: 35, y: 85, char: '🛁', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env3', x: 85, y: 80, char: '🚪', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env4', x: 80, y: 20, char: '🖼️', isReacting: false, clickCount: 0, areaId: 'blue' },
-      ]);
+      setPlacedItems([]);
       setUserProfile({
         name: 'Focus User',
         bio: '專注於每一刻，成就更好的自己。',
@@ -705,7 +732,7 @@ const App: React.FC = () => {
         identity: 'other' as UserIdentity,
         registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       });
-      
+
       setCurrentRoute(AppRoute.HOME);
       setHasCompletedOnboarding(null);
       setHasCompletedTour(null);
@@ -724,34 +751,26 @@ const App: React.FC = () => {
 
   const executeDeleteAccount = async () => {
     if (!user) return;
-    
+
     try {
       setIsLoadingData(true);
       setShowDeleteConfirm(false);
       const uid = user.id;
-      
+
       // 1. Delete user data
       await supabase.from('users').delete().eq('id', uid);
-      
+
       // 2. Delete Auth user (requires RPC or edge function usually, 
       // but for client-side we'll just logout for now, 
       // as deleting auth user directly from client is restricted)
       await supabase.auth.signOut();
-      
+
       // 3. Reset local states
       _setCoins(0);
       setTasks([]);
       setArchivedTasks([]);
       setHomeSections(['focus', 'calendar', 'games']);
-      setPlacedItems([
-        { id: 'start1', x: 50, y: 50, char: '🦦', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'start2', x: 20, y: 30, char: '📺', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'start3', x: 70, y: 20, char: '🧸', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env1', x: 15, y: 85, char: '🚽', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env2', x: 35, y: 85, char: '🛁', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env3', x: 85, y: 80, char: '🚪', isReacting: false, clickCount: 0, areaId: 'blue' },
-        { id: 'env4', x: 80, y: 20, char: '🖼️', isReacting: false, clickCount: 0, areaId: 'blue' },
-      ]);
+      setPlacedItems([]);
       setUserProfile({
         name: 'Focus User',
         bio: '專注於每一刻，成就更好的自己。',
@@ -763,7 +782,7 @@ const App: React.FC = () => {
         identity: 'other' as UserIdentity,
         registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       });
-      
+
       setHasCompletedOnboarding(null);
       setHasCompletedTour(null);
       setCurrentRoute(AppRoute.HOME);
@@ -780,7 +799,7 @@ const App: React.FC = () => {
     return (
       <div className="h-[100dvh] w-full bg-white flex flex-col items-center justify-center">
         <div className="w-16 h-16 bg-blue-500 rounded-[2rem] flex items-center justify-center animate-pulse shadow-2xl shadow-blue-200">
-           <Sparkles className="text-white" size={32} />
+          <Sparkles className="text-white" size={32} />
         </div>
         <p className="mt-6 text-gray-400 font-bold text-sm tracking-widest animate-pulse">LOADING FOCUS AI...</p>
       </div>
@@ -799,12 +818,7 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] w-full bg-white shadow-xl relative overflow-hidden flex flex-col font-sans">
-      <FeatureTour 
-        steps={tourSteps} 
-        isVisible={isTourVisible} 
-        onComplete={handleTourComplete} 
-      />
-      
+
       <ConfirmationModal
         isOpen={showDeleteConfirm && deleteStep === 1}
         onClose={() => setShowDeleteConfirm(false)}
@@ -834,11 +848,18 @@ const App: React.FC = () => {
       {currentRoute !== AppRoute.AI_CHAT && (
         <Navigation currentRoute={currentRoute} navigateTo={navigateTo} fab={renderFAB()} />
       )}
-      
+
       {/* 遊戲子導覽列 - 當在遊戲相關頁面時顯示 */}
       {[AppRoute.GAME_PETS, AppRoute.GAME_RACE, AppRoute.LEADERBOARD].includes(currentRoute) && (
         <GameNavigation currentRoute={currentRoute} navigateTo={navigateTo} />
       )}
+
+      {/* Feature Tour moved to bottom to ensure maximum z-index visibility */}
+      <FeatureTour
+        steps={tourSteps}
+        isVisible={isTourVisible}
+        onComplete={handleTourComplete}
+      />
     </div>
   );
 };

@@ -1,17 +1,16 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { AppRoute, CalendarEvent } from '../types';
-import { ChevronLeft, List, Search, Plus, Calendar, ChevronRight, Settings2 } from 'lucide-react';
+import { ChevronLeft, List, Search, Calendar, ChevronRight, Settings2 } from 'lucide-react';
 
 interface CalendarDetailViewProps {
   navigateTo: (route: AppRoute) => void;
   events: CalendarEvent[];
   setEvents: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
-  onAddEvent?: (callback: (indicatorTop: number) => void) => void;
   isTourActive?: boolean;
 }
 
-const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, events, setEvents, onAddEvent, isTourActive }) => {
+const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, events, setEvents, isTourActive }) => {
   const hours = Array.from({length: 25}, (_, i) => i.toString().padStart(2, '0') + ':00');
   const HOUR_HEIGHT = 40; // 1小時 = 40像素
   
@@ -35,7 +34,7 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
   const [selectedDate, setSelectedDate] = useState(() => new Date().getDate());
   const [viewMode, setViewMode] = useState<'day' | 'month'>(() => {
     const saved = localStorage.getItem('calendar_view_mode');
-    return (saved === 'day' || saved === 'month') ? saved : 'day';
+    return (saved === 'day' || saved === 'month') ? saved : 'month';
   });
   
   const [displayDate, setDisplayDate] = useState(new Date());
@@ -326,7 +325,7 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
                             e.currentTarget.blur();
                           }
                         }}
-                        onBlur={(e) => {
+                        onBlur={() => {
                           // 延遲執行 blur 邏輯，讓點擊顏色按鈕的事件可以先觸發
                           setTimeout(() => {
                             setEvents(prev => {
@@ -367,7 +366,7 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
                         setHasMoved(false);
                         document.body.style.overflow = 'hidden';
                       }}
-                      onPointerUp={(e) => {
+                      onPointerUp={() => {
                         if (!hasMoved) {
                           // 如果沒有移動，則視為點擊編輯
                           setEvents(prev => prev.map(ev => ev.id === event.id ? { ...ev, isDraft: true } : ev));
@@ -404,9 +403,8 @@ const CalendarDetailView: React.FC<CalendarDetailViewProps> = ({ navigateTo, eve
                   transform: 'translateY(-50%)' 
                 }}
               >
-                  {/* 時間標籤：-ml-16 與小時文字對齊，並確保不遮擋格線 */}
                   <div 
-                    onPointerDown={(e) => {
+                    onPointerDown={() => {
                       setIsDragging(true);
                       document.body.style.overflow = 'hidden';
                     }}

@@ -65,3 +65,11 @@ export enum AppRoute {
   FOCUS_ANALYSIS = 'focus-analysis',
   CALENDAR_ADMIN = 'calendar-admin'
 }
+
+export interface TourStep {
+  targetId: string;
+  title: string;
+  content: string;
+  position?: 'top' | 'bottom' | 'left' | 'right';
+  navigateTo?: string;
+}

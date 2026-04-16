@@ -12,7 +12,6 @@ interface LeaderboardViewProps {
     level: number;
     id?: string;
   };
-  coins: number;
 }
 
 interface Player {
@@ -25,13 +24,13 @@ interface Player {
   id: string;
 }
 
-const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfile, coins }) => {
+const LeaderboardView: React.FC<LeaderboardViewProps> = ({ navigateTo, userProfile }) => {
   const [tab, setTab] = useState<'area' | 'friends'>('area');
   const [players, setPlayers] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Player[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [, setIsSearching] = useState(false);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
 
   const fetchFollowing = async () => {

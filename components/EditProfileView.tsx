@@ -18,8 +18,6 @@ interface EditProfileViewProps {
 // 根據身份產生預設行事曆事件
 const generatePresetEvents = (identity: UserIdentity): CalendarEvent[] => {
   const today = new Date();
-  const year = today.getFullYear();
-  const month = (today.getMonth() + 1).toString().padStart(2, '0');
 
   const makeEvent = (dayOffset: number, hour: number, title: string, color: string, heightHours = 1): CalendarEvent => {
     const d = new Date(today);

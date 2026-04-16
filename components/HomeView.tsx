@@ -1,16 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { AppRoute, Task, CalendarEvent } from '../types';
-import { Calendar as CalendarIcon, MoreHorizontal, Plus, ChevronRight, MessageCircle, Clock, GripVertical, User, BarChart2, Star, Award, Zap } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, GripVertical, User, BarChart2, Award, Zap } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 
 interface HomeViewProps {
   navigateTo: (route: AppRoute) => void;
   tasks: Task[];
-  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   toggleTask: (id: string) => void;
   archiveTask: (id: string) => void;
   calendarEvents: CalendarEvent[];
@@ -22,6 +21,10 @@ interface HomeViewProps {
     avatar: string;
   };
   focusLogs: any[];
+  isTourVisible?: boolean;
+  timerTimeLeft: number;
+  visibleSubSections: Record<string, string[]>;
+  setVisibleSubSections: React.Dispatch<React.SetStateAction<Record<string, string[]>>>;
 }
 
 const allSubSections: Record<string, { id: string, name: string }[]> = {
@@ -77,32 +80,25 @@ const SortableSubItem = ({ id, children }: { id: string; children: React.ReactNo
   );
 };
 
-const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggleTask, archiveTask, calendarEvents, sections, setSections, userProfile, focusLogs }) => {
-  const [visibleSubSections, setVisibleSubSections] = useState<Record<string, string[]>>(() => {
-    try {
-      const saved = localStorage.getItem('focus_visible_subsections');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && parsed.focus && parsed.calendar && parsed.games) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.error("Failed to parse visible subsections", e);
-    }
-    return {
-      focus: ['tasks', 'timer', 'analysis'],
-      calendar: ['calendar_card'],
-      games: ['pets', 'race', 'ranking']
-    };
-  });
+const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, archiveTask, calendarEvents, sections, setSections, userProfile, focusLogs, isTourVisible, timerTimeLeft, visibleSubSections, setVisibleSubSections }) => {
 
   const [showAddMenu, setShowAddMenu] = useState<string | null>(null);
   const [confirmTask, setConfirmTask] = useState<Task | null>(null);
 
+  // 當導覽啟動時，強制顯示所有相關區塊
+  const effectiveVisibleSubSections = useMemo(() => {
+    if (isTourVisible) {
+      return {
+        focus: ['tasks', 'timer', 'analysis'],
+        calendar: ['calendar_card'],
+        games: ['pets', 'race', 'ranking']
+      };
+    }
+    return visibleSubSections;
+  }, [visibleSubSections, isTourVisible]);
+
   const saveSubSections = (newVal: Record<string, string[]>) => {
     setVisibleSubSections(newVal);
-    localStorage.setItem('focus_visible_subsections', JSON.stringify(newVal));
   };
 
   const removeSubSection = (sectionId: string, subId: string) => {
@@ -215,7 +211,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
   const renderSection = (id: string) => {
     switch (id) {
       case 'focus':
-        const hiddenFocus = allSubSections.focus.filter(s => !visibleSubSections.focus.includes(s.id));
+        const hiddenFocus = allSubSections.focus.filter(s => !effectiveVisibleSubSections.focus.includes(s.id));
         return (
           <div key="focus" className="pl-8 pr-6">
             <div className="flex justify-between items-center mb-3 relative">
@@ -253,9 +249,9 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
               </div>
             </div>
 
-            <SortableContext items={visibleSubSections.focus} strategy={verticalListSortingStrategy}>
+            <SortableContext items={effectiveVisibleSubSections.focus} strategy={verticalListSortingStrategy}>
               <div className="space-y-4">
-                {visibleSubSections.focus.map(subId => (
+                {effectiveVisibleSubSections.focus.map(subId => (
                   <SortableSubItem key={subId} id={subId}>
                     {subId === 'tasks' ? (
                       <motion.div 
@@ -350,10 +346,10 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
                             🍅
                           </div>
                           <div className="text-right">
-                             <div className="text-[40px] font-black tracking-tighter leading-none mb-1">
-                                {Math.floor(2400 / 60)}:00
-                             </div>
-                             <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">Timer Config</div>
+                              <div className="text-[40px] font-black tracking-tighter leading-none mb-1">
+                                {Math.floor(timerTimeLeft / 60)}:{Math.floor(timerTimeLeft % 60).toString().padStart(2, '0')}
+                              </div>
+                              <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">{timerTimeLeft > 0 ? 'Remaining' : 'Session End'}</div>
                           </div>
                         </div>
                         <h3 className="text-xl font-black mt-6 tracking-tight">番茄鐘</h3>
@@ -396,7 +392,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
           </div>
         );
       case 'calendar':
-        const hiddenCalendar = allSubSections.calendar.filter(s => !visibleSubSections.calendar.includes(s.id));
+        const hiddenCalendar = allSubSections.calendar.filter(s => !effectiveVisibleSubSections.calendar.includes(s.id));
         return (
           <div key="calendar" className="pl-8 pr-6">
             <div className="flex justify-between items-center mb-4 relative">
@@ -427,8 +423,8 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
               </div>
             </div>
             
-            <SortableContext items={visibleSubSections.calendar} strategy={verticalListSortingStrategy}>
-              {visibleSubSections.calendar.map(subId => (
+            <SortableContext items={effectiveVisibleSubSections.calendar} strategy={verticalListSortingStrategy}>
+              {effectiveVisibleSubSections.calendar.map(subId => (
                 <SortableSubItem key={subId} id={subId}>
                   <motion.div 
                     initial={{ y: 20, opacity: 0 }}
@@ -483,7 +479,7 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
           </div>
         );
       case 'games':
-        const hiddenGames = allSubSections.games.filter(s => !visibleSubSections.games.includes(s.id));
+        const hiddenGames = allSubSections.games.filter(s => !effectiveVisibleSubSections.games.includes(s.id));
         return (
           <div key="games" className="pl-8 pr-6" id="home-games-area">
             <div className="flex justify-between items-center mb-4 relative">
@@ -513,9 +509,9 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
                 )}
               </div>
             </div>
-            <SortableContext items={visibleSubSections.games} strategy={verticalListSortingStrategy}>
+            <SortableContext items={effectiveVisibleSubSections.games} strategy={verticalListSortingStrategy}>
               <div className="space-y-4">
-                {visibleSubSections.games.map(subId => (
+                {effectiveVisibleSubSections.games.map(subId => (
                   <SortableSubItem key={subId} id={subId}>
                     {subId === 'pets' ? (
                       <motion.div 
@@ -633,12 +629,11 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, setTasks, toggle
 
   return (
     <div className="p-4">
-      <div className="flex justify-between items-center mb-6 pl-4 pr-2">
+      <div className="flex justify-between items-center mb-6 pl-4 pr-2" id="home-profile">
         <h1 className="text-3xl font-extrabold tracking-tight">F.O.C.U.S.</h1>
         <button 
-          id="home-profile"
           onClick={() => navigateTo(AppRoute.PROFILE)}
-          className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors shadow-sm overflow-hidden"
+          className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-all shadow-sm overflow-hidden active:scale-95"
         >
           {userProfile?.avatar ? (
             <img src={userProfile.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />

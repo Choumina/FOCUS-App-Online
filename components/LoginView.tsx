@@ -39,11 +39,11 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginStart }) => {
   const getAuthErrorMessage = (error: any): string => {
     const msg = error?.message || '';
     if (msg.includes('Invalid login credentials')) return '帳號或密碼錯誤，請重新確認。';
-    if (msg.includes('Email not confirmed')) return '請先前往您的信箱，點擊驗證連結後再登入。';
+    if (msg.includes('Email not confirmed')) return '請先前往您的信箱，點擊驗證連結後再登入。\n（或者您可以聯絡管理員關閉信箱驗證）';
     if (msg.includes('User already registered')) return '此 Email 已被註冊，請直接登入。';
     if (msg.includes('Password should be')) return '密碼至少需要 6 個字元。';
     if (msg.includes('Unable to validate email')) return 'Email 格式不正確，請重新輸入。';
-    if (msg.includes('rate limit')) return '嘗試次數過多，請稍後再試。';
+    if (msg.includes('rate limit')) return '操作太過頻繁（Rate Limit），請等候幾分鐘後再試一次，或嘗試使用 Google 登入。';
     if (msg.includes('Network')) return '網路連線異常，請檢查網路後再試。';
     return `操作失敗：${msg}`;
   };
@@ -66,16 +66,17 @@ const LoginView: React.FC<LoginViewProps> = ({ onLoginStart }) => {
             }
           }
         });
+        
         if (error) throw error;
+        
         if (data.session) {
-          // 直接自動登入，App.tsx 的 onAuthStateChange 會接管後續流程
-          // 不需要強制 signOut，讓使用者無縫進入 App
+          // 如果 Supabase 關閉了 Email 驗證，會直接登入並獲得 session
           return;
         } else {
           // Supabase 設定了 email 驗證 — data.session 為 null
-          alert('註冊成功！\n\n請前往您的信箱（' + email + '），\n點擊驗證連結後即可登入。');
+          alert('註冊成功！\n\n系統已發送驗證信（若未收到，請檢查垃圾信箱）。\n\n💡 提示：若想快速測試，可前往 Supabase 後台關閉 "Confirm email" 設定。');
+          setManualMode('login');
         }
-        setManualMode('login');
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,

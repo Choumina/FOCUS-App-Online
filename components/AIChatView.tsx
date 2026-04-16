@@ -326,11 +326,6 @@ const AIChatView: React.FC<{
     }
   };
 
-  const handleReset = () => {
-    if (currentConvId) {
-      updateMessages([]);
-    }
-  };
 
   const handleSend = async (customMsg?: string) => {
     const msgToSend = customMsg || input.trim();

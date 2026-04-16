@@ -1,14 +1,8 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronRight, X, Info } from 'lucide-react';
-
-interface TourStep {
-  targetId: string;
-  title: string;
-  content: string;
-  position?: 'top' | 'bottom' | 'left' | 'right';
-  navigateTo?: string;
-}
+import { TourStep } from '../types';
+import { useFeatureTour } from '../hooks/useFeatureTour';
 
 interface FeatureTourProps {
   steps: TourStep[];
@@ -17,114 +11,81 @@ interface FeatureTourProps {
   onNavigate?: (route: string) => void;
 }
 
-const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible, onNavigate }) => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [coords, setCoords] = useState({ top: 0, left: 0, width: 0, height: 0 });
-  const [isReady, setIsReady] = useState(false);
+const FeatureTour: React.FC<FeatureTourProps> = (props) => {
+  const { isVisible, steps, onComplete } = props;
+  const { 
+    currentStep, coords, isReady, showTroubleshoot, step, handleNext, updateCoords 
+  } = useFeatureTour(props);
 
-  // 當 currentStep 改變，若有 navigateTo，通知上層切換路由
-  useEffect(() => {
-    if (isVisible && steps[currentStep]?.navigateTo && onNavigate) {
-      onNavigate(steps[currentStep].navigateTo!);
-    }
-  }, [currentStep, steps, isVisible, onNavigate]);
-
-  const mounted = React.useRef(true);
-  useEffect(() => {
-    return () => { mounted.current = false; };
-  }, []);
-
-  const updateCoords = () => {
-    const step = steps[currentStep];
-    if (!step || !isVisible || !mounted.current) return;
-
-    setIsReady(false); // Reset readiness when calculating new coords
-
-    const attemptUpdate = (retryLeft: number) => {
-      if (!mounted.current || !isVisible) return;
-      
-      const el = document.getElementById(step.targetId);
-      if (el) {
-        // Must use 'auto' (instant) so that we don't capture coords mid-scroll
-        el.scrollIntoView({ behavior: 'auto', block: 'center' }); 
-        
-        // Wait for next frame layout to complete
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            if (!mounted.current || !isVisible) return;
-            const rect = el.getBoundingClientRect();
-            // 由於外容器為 fixed，這裡的 viewport 座標可以直接拿來用
-            setCoords({
-              top: rect.top,
-              left: rect.left,
-              width: rect.width,
-              height: rect.height
-            });
-            setIsReady(true);
-          }, 50); // Small delay to guarantee reflow
-        });
-      } else if (retryLeft > 0) {
-        setTimeout(() => attemptUpdate(retryLeft - 1), 100);
-      } else {
-        console.warn(`FeatureTour: Could not find target ${step.targetId} after all retries.`);
-      }
-    };
-    
-    // Increased retries to 30 (3 seconds). Some route transitions or data fetches can take a moment.
-    attemptUpdate(30); 
-  };
-
-  useEffect(() => {
-    if (isVisible) {
-      updateCoords();
-    }
-  }, [currentStep, isVisible]);
-
-  useEffect(() => {
-    window.addEventListener('resize', updateCoords);
-    return () => window.removeEventListener('resize', updateCoords);
-  }, [currentStep]);
-
-  const step = steps[currentStep];
-
-  const handleNext = () => {
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(prev => prev + 1);
-    } else {
-      if (window.confirm('導覽已結束，準備好開啟您的專注之旅了嗎？')) {
-        onComplete();
-      }
-    }
-  };
-
-  // 避免在座標尚未計算出來（全 0）或隱藏狀態下顯示破綻
-  const isActuallyVisible = isVisible && 
-    isReady && 
-    (coords.width > 0 || coords.height > 0);
+  // 定義真正的可見性：isVisible 是外部開關，isActuallyVisible 是內部座標已鎖定
+  const isActuallyVisible = isVisible && isReady;
 
   return (
-    <div className={`fixed inset-0 z-[300] transition-opacity duration-500 ${isActuallyVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-      {/* Backdrop with hole */}
-      <div className="absolute inset-0 bg-black/60 transition-all duration-500" style={{
-        clipPath: `polygon(0% 0%, 0% 100%, ${coords.left}px 100%, ${coords.left}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top}px, ${coords.left + coords.width}px ${coords.top + coords.height}px, ${coords.left}px ${coords.top + coords.height}px, ${coords.left}px 100%, 100% 100%, 100% 0%)`
-      }} />
+    <div className={`fixed inset-0 z-[999] transition-opacity duration-500 ${isActuallyVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+      {/* Backdrop with circular cutout using SVG mask */}
+      <svg className="absolute inset-0 w-full h-full pointer-events-none">
+        <defs>
+          <mask id="tour-mask">
+            <rect x="0" y="0" width="100%" height="100%" fill="white" />
+            {isActuallyVisible && (
+              <motion.rect
+                initial={false}
+                animate={{
+                  x: coords.left - 12,
+                  y: coords.top - 12,
+                  width: coords.width + 24,
+                  height: coords.height + 24,
+                }}
+                rx={24}
+                fill="black"
+              />
+            )}
+          </mask>
+        </defs>
+        <motion.rect
+          initial={false}
+          animate={{ opacity: isActuallyVisible ? 1 : 0 }}
+          x="0"
+          y="0"
+          width="100%"
+          height="100%"
+          fill="rgba(0,0,0,0.65)"
+          mask="url(#tour-mask)"
+          className="transition-all duration-500"
+        />
+      </svg>
 
-      {/* Highlight Box */}
+      {/* 故障排除按鈕：如果尋找超過 2.5 秒則顯示 */}
+      {isVisible && !isReady && showTroubleshoot && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-10 z-[350]">
+          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/20 text-center shadow-2xl">
+            <p className="text-white font-bold mb-4">似乎找不到目標按鈕...</p>
+            <button 
+              onClick={() => updateCoords()}
+              className="bg-white text-black px-6 py-3 rounded-2xl font-black text-sm hover:scale-105 transition-transform"
+            >
+              直接在中心顯示導覽
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Highlight Circle (Now a Rect) */}
       {isActuallyVisible && (
         <motion.div
           initial={false}
           animate={{
-            top: coords.top - 8,
-            left: coords.left - 8,
-            width: coords.width + 16,
-            height: coords.height + 16,
+            top: coords.top - 12,
+            left: coords.left - 12,
+            width: coords.width + 24,
+            height: coords.height + 24,
           }}
-          className="absolute border-2 border-white rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.5)] pointer-events-none"
+          className="absolute border-[2.5px] border-white rounded-[2rem] shadow-[0_0_30px_rgba(255,255,255,0.4)] pointer-events-none"
         >
           <motion.div 
-            animate={{ scale: [1, 1.1, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="absolute inset-0 border-2 border-white/50 rounded-xl"
+            animate={{ scale: [1, 1.05, 1], opacity: [0.5, 0.2, 0.5] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -inset-2 border-2 border-white/40 rounded-[2.2rem]"
           />
         </motion.div>
       )}
@@ -147,36 +108,43 @@ const FeatureTour: React.FC<FeatureTourProps> = ({ steps, onComplete, isVisible,
             exit={{ opacity: 0, scale: 0.95 }}
             className="absolute w-[280px] bg-white rounded-3xl p-5 shadow-2xl pointer-events-auto border border-gray-100 z-[310]"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-8 h-8 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
-                <Info size={18} />
+            <div className="flex items-start justify-between mb-4">
+              <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
+                <Info size={18} strokeWidth={2.5} />
               </div>
+              <button 
+                onClick={onComplete}
+                className="p-1.5 text-gray-300 hover:text-gray-500 transition-colors"
+                title="關閉導覽"
+              >
+                <X size={18} strokeWidth={3} />
+              </button>
             </div>
 
-          <h4 className="text-lg font-black text-gray-800 mb-1">{step.title}</h4>
-          <p className="text-sm text-gray-500 font-medium leading-relaxed mb-6">
-            {step.content}
-          </p>
+            <h4 className="text-xl font-black text-gray-900 mb-2">{step.title}</h4>
+            <p className="text-[13px] text-gray-500 font-bold leading-relaxed mb-8">
+              {step.content}
+            </p>
 
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">
-              Step {currentStep + 1} of {steps.length}
-            </span>
-            <button
-              onClick={handleNext}
-              className="bg-gray-900 text-white px-5 py-2.5 rounded-2xl font-bold text-sm flex items-center gap-2 hover:bg-gray-800 transition-colors"
-            >
-              {currentStep === steps.length - 1 ? '完成導覽' : '下一步'}
-              <ChevronRight size={16} />
-            </button>
-          </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60">
+                STEP {currentStep + 1} OF {steps.length}
+              </span>
+              <button
+                onClick={handleNext}
+                className="bg-black text-white px-6 py-2.5 rounded-full font-black text-[13px] flex items-center gap-2 hover:scale-105 transition-all shadow-lg active:scale-95"
+              >
+                {currentStep === steps.length - 1 ? '完成導覽' : '下一步'}
+                <ChevronRight size={16} strokeWidth={3} />
+              </button>
+            </div>
 
-          {/* Arrow */}
-          <div 
-            className={`absolute left-1/2 -translate-x-1/2 w-4 h-4 bg-white rotate-45 border-l border-t border-gray-100 ${coords.top > window.innerHeight / 2 ? '-bottom-2 border-l-0 border-t-0 border-r border-b' : '-top-2'}`}
-          />
-        </motion.div>
-      )}
+            {/* Arrow */}
+            <div 
+              className={`absolute left-1/2 -translate-x-1/2 w-4 h-4 bg-white rotate-45 border-l border-t border-gray-100 ${coords.top > window.innerHeight / 2 ? '-bottom-2 border-l-0 border-t-0 border-r border-b' : '-top-2'}`}
+            />
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

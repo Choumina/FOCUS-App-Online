@@ -1,12 +1,11 @@
-
 import React, { useState, useMemo } from 'react';
 import { AppRoute, FocusLog } from '../types';
 import ViewHeader from './ViewHeader';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  LineChart, Line, AreaChart, Area, Cell, PieChart, Pie
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  AreaChart, Area
 } from 'recharts';
-import { Calendar, Clock, Zap, Target, TrendingUp, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Clock, Zap, Target, TrendingUp, AlertCircle } from 'lucide-react';
 
 interface FocusAnalysisViewProps {
   navigateTo: (route: AppRoute) => void;
@@ -80,6 +79,48 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
     }
     return result;
   }, [focusLogs, timeScale]);
+
+  // 計算連續專注天數 (Streak)
+  const currentStreak = useMemo(() => {
+    if (!focusLogs || focusLogs.length === 0) return 0;
+    
+    // 取得所有唯一的專注日期 (YCYY-MM-DD)
+    const dates: string[] = Array.from(new Set<string>(
+      focusLogs
+        .filter(log => log && log.startTime)
+        .map(log => log.startTime.split('T')[0])
+    )).sort((a, b) => b.localeCompare(a));
+
+    if (dates.length === 0) return 0;
+
+    const today = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    
+    // 如果今天或昨天都沒有紀錄，則連續天數中斷
+    if (dates[0] !== today && dates[0] !== yesterday) return 0;
+
+    let streak = 1;
+    for (let i = 0; i < dates.length - 1; i++) {
+      const current = new Date(dates[i]);
+      const next = new Date(dates[i + 1]);
+      const diffTime = Math.abs(current.getTime() - next.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    return streak;
+  }, [focusLogs]);
+
+  const streakMessage = useMemo(() => {
+    if (currentStreak === 0) return "開始您的第一場專注實驗吧！";
+    if (currentStreak === 1) return "專注之旅才剛開始，明天也要繼續保持！";
+    if (currentStreak < 5) return `太棒了！您已連續 ${currentStreak} 天達成目標，保持節奏！`;
+    return `卓越的自律！您已連續 ${currentStreak} 天專注，正處於巔峰狀態！`;
+  }, [currentStreak]);
 
   const totalMinutes = useMemo(() => focusLogs.reduce((acc, log) => acc + log.duration, 0), [focusLogs]);
   const avgFocusTime = useMemo(() => focusLogs.length > 0 ? Math.round(totalMinutes / focusLogs.length) : 0, [totalMinutes, focusLogs]);
@@ -209,7 +250,7 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
               </div>
               <div>
                  <h4 className="font-black text-gray-800">連續達成目標</h4>
-                 <p className="text-xs text-gray-400 font-bold">您已連續 3 天完成預定目標！</p>
+                 <p className="text-xs text-gray-400 font-bold">{streakMessage}</p>
               </div>
            </div>
         </div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AppRoute, Item } from '../types';
-import { ChevronLeft, Plus, DollarSign, Sparkles, Heart, Target, ShoppingBag, Layers, Star } from 'lucide-react';
+import { ChevronLeft, Plus, DollarSign, Sparkles, Heart, ShoppingBag, Layers, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface GameViewProps {

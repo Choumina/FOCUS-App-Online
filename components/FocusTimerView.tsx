@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppRoute } from '../types';
-import { Search, Mic, Play, Pause, RotateCcw, Plus, Minus, TrendingUp } from 'lucide-react';
+import { Search, Mic, Play, Pause, RotateCcw, Plus, Minus } from 'lucide-react';
 import ViewHeader from './ViewHeader';
 
 interface FocusTimerViewProps {
@@ -129,13 +129,6 @@ const FocusTimerView: React.FC<FocusTimerViewProps> = ({
               className="px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-gray-400"
             >
               Tasks
-            </button>
-            <button 
-              onClick={() => navigateTo(AppRoute.FOCUS_ANALYSIS)}
-              className="p-2.5 text-gray-400 hover:text-blue-500 transition-colors"
-              title="專注分析"
-            >
-              <TrendingUp size={20} />
             </button>
             <button 
               className="px-4 py-1.5 text-[10px] font-black uppercase tracking-widest bg-white shadow-sm rounded-full text-blue-500"
