@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AppRoute, Task } from '../types';
 import ConfirmationModal from './ConfirmationModal';
-import { CheckCircle2, Circle, Trash2, Sparkles, Loader2, X } from 'lucide-react';
+import { CheckCircle2, Circle, Trash2, Sparkles, Loader2, X, Calendar } from 'lucide-react';
 import { generateTaskBreakdown } from '../geminiService';
 import ViewHeader from './ViewHeader';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,6 +30,7 @@ const TasksView: React.FC<TasksViewProps> = ({
 }) => {
   const [localIsAdding, setLocalIsAdding] = useState(false);
   const [localNewTitle, setLocalNewTitle] = useState('');
+  const [localNewDate, setLocalNewDate] = useState(new Date().toISOString().split('T')[0]);
   const [confirmTask, setConfirmTask] = useState<Task | null>(null);
   const [isBreakingDown, setIsBreakingDown] = useState<string | null>(null);
   const [breakdownResults, setBreakdownResults] = useState<{taskId: string, subtasks: Subtask[]}>({ taskId: '', subtasks: [] });
@@ -38,6 +39,8 @@ const TasksView: React.FC<TasksViewProps> = ({
   const setIsAdding = setIsAddingProp !== undefined ? setIsAddingProp : setLocalIsAdding;
   const newTitle = newTitleProp !== undefined ? newTitleProp : localNewTitle;
   const setNewTitle = setNewTitleProp !== undefined ? setNewTitleProp : setLocalNewTitle;
+  const newDate = localNewDate;
+  const setNewDate = setLocalNewDate;
   
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -52,13 +55,18 @@ const TasksView: React.FC<TasksViewProps> = ({
       const newTask: Task = {
         id: Date.now().toString(),
         title: newTitle.trim(),
-        dueDate: new Date().toISOString().split('T')[0],
+        dueDate: newDate,
         completed: false
       };
       setTasks([...tasks, newTask]);
       setNewTitle('');
       setIsAdding(false);
+      setNewDate(new Date().toISOString().split('T')[0]);
     }
+  };
+
+  const updateTaskDate = (id: string, date: string) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, dueDate: date } : t));
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -139,7 +147,15 @@ const TasksView: React.FC<TasksViewProps> = ({
                     AI 拆解
                   </button>
                 )}
-                <span className="text-[10px] text-gray-400 font-medium">截止日期: {task.dueDate}</span>
+                <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-medium bg-gray-50 px-2 py-0.5 rounded-full hover:text-blue-500 transition-colors cursor-pointer group/date">
+                  <Calendar size={10} className="group-hover/date:text-blue-400" />
+                  <input 
+                    type="date" 
+                    value={task.dueDate}
+                    onChange={(e) => updateTaskDate(task.id, e.target.value)}
+                    className="bg-transparent border-none focus:ring-0 p-0 cursor-pointer text-inherit font-inherit w-20"
+                  />
+                </div>
               </div>
 
               {/* AI 拆解結果面板 */}
@@ -209,7 +225,18 @@ const TasksView: React.FC<TasksViewProps> = ({
                 placeholder="輸入新任務..."
                 className="w-full text-lg font-bold text-gray-800 focus:outline-none bg-transparent"
               />
-              <p className="text-xs text-blue-400 font-medium mt-1 italic">按 Enter 儲存任務</p>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-1.5 text-xs text-blue-400 font-bold bg-blue-50/50 px-2 py-0.5 rounded-lg">
+                  <Calendar size={12} />
+                  <input 
+                    type="date" 
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="bg-transparent border-none focus:ring-0 p-0 cursor-pointer text-inherit font-inherit w-24"
+                  />
+                </div>
+                <p className="text-xs text-blue-300 font-medium italic">按 Enter 儲存</p>
+              </div>
             </div>
           </div>
         )}
