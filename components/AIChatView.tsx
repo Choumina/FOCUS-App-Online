@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { AppRoute } from '../types';
-import { Send, Sparkles, Home, RotateCcw, Plus, X, Maximize2, Zap } from 'lucide-react';
+import { Send, Sparkles, Home, RotateCcw, X, Maximize2, Zap, ChevronRight } from 'lucide-react';
 import { chatWithAssistant } from '../geminiService';
-import { CalendarEvent, Task } from '../types';
+import { CalendarEvent, Task, UserIdentity } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ScatterChart, Scatter, XAxis, YAxis, ZAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList, ReferenceLine } from 'recharts';
 import ConfirmationModal from './ConfirmationModal';
@@ -216,7 +216,7 @@ const AIChatView: React.FC<{
     }];
   });
 
-  const [currentConvId, setCurrentConvId] = useState<string>('default');
+  const [currentConvId] = useState<string>('default');
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showEnterHint, setShowEnterHint] = useState(false);

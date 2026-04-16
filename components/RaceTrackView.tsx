@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppRoute, UserProfile } from '../types';
-import { ChevronLeft, Play, Zap, Flag, Coins, Star, Ticket, QrCode, Target } from 'lucide-react';
+import { ChevronLeft, Play, Zap, Flag, Coins, Star, Ticket, QrCode, Target, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface RaceTrackViewProps {
