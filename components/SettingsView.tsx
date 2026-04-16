@@ -1,22 +1,59 @@
 import React, { useState } from 'react';
 import { AppRoute } from '../types';
 import ViewHeader from './ViewHeader';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, ChevronRight, ChevronLeft } from 'lucide-react';
 
 interface SettingsViewProps {
   navigateTo: (route: AppRoute) => void;
   onResetTour?: () => void;
+  appSettings: {
+    timerEndNotify: boolean;
+    timerWarnTime: number;
+    focusReminder: boolean;
+    focusReminderInterval: number;
+    appBlockerFocus: boolean;
+    appBlockerBreak: boolean;
+  };
+  setAppSettings: React.Dispatch<React.SetStateAction<any>>;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour, appSettings, setAppSettings }) => {
   const [tab, setTab] = useState<'notif' | 'block'>('notif');
   const [tourReset, setTourReset] = useState(false);
 
-  const Toggle = ({label, value}: {label: string, value: boolean}) => (
-    <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 mb-4 shadow-sm">
+  const updateSetting = (key: string, value: any) => {
+    setAppSettings((prev: any) => ({ ...prev, [key]: value }));
+  };
+
+  const Toggle = ({label, value, onToggle}: {label: string, value: boolean, onToggle: () => void}) => (
+    <div 
+      onClick={onToggle}
+      className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 mb-4 shadow-sm cursor-pointer active:scale-[0.98] transition-all"
+    >
       <span className="text-sm font-bold text-gray-700">{label}</span>
       <div className={`w-12 h-6 rounded-full transition-colors relative ${value ? 'bg-green-400' : 'bg-gray-300'}`}>
         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${value ? 'left-7' : 'left-1'}`} />
+      </div>
+    </div>
+  );
+
+  const NumberSelector = ({label, value, onChange, unit}: {label: string, value: number, onChange: (val: number) => void, unit: string}) => (
+    <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 shadow-sm mb-4">
+      <span className="text-sm font-bold text-gray-700">{label}</span>
+      <div className="flex items-center gap-4">
+        <button 
+          onClick={() => onChange(Math.max(1, value - 1))}
+          className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 active:scale-90 transition-all font-black"
+        >
+          -
+        </button>
+        <span className="text-indigo-600 font-black text-sm w-12 text-center">{value} {unit}</span>
+        <button 
+          onClick={() => onChange(Math.min(60, value + 1))}
+          className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 active:scale-90 transition-all font-black"
+        >
+          +
+        </button>
       </div>
     </div>
   );
@@ -36,13 +73,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour }) 
         <div className="bg-gray-200/50 rounded-full flex p-1 mb-8">
           <button 
             onClick={() => setTab('notif')}
-            className={`flex-1 py-3 text-sm font-bold rounded-full transition-all ${tab === 'notif' ? 'bg-white shadow-md' : 'text-gray-400'}`}
+            className={`flex-1 py-3 text-sm font-bold rounded-full transition-all ${tab === 'notif' ? 'bg-white shadow-md text-gray-900' : 'text-gray-400'}`}
           >
             專注時通知
           </button>
           <button 
             onClick={() => setTab('block')}
-            className={`flex-1 py-3 text-sm font-bold rounded-full transition-all ${tab === 'block' ? 'bg-white shadow-md' : 'text-gray-400'}`}
+            className={`flex-1 py-3 text-sm font-bold rounded-full transition-all ${tab === 'block' ? 'bg-white shadow-md text-gray-900' : 'text-gray-400'}`}
           >
             App 封鎖程式
           </button>
@@ -52,27 +89,40 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour }) 
           {tab === 'notif' ? (
             <>
               <div>
-                <Toggle label="計時器結束時通知我" value={true} />
-                <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
-                  <span className="text-sm font-bold text-gray-700">即將結束時長(分鐘)</span>
-                  <span className="text-gray-400 text-sm">2 &gt;</span>
-                </div>
-                <p className="text-[10px] text-gray-400 mt-2 px-2">可用來協助你準備開始休息或開始番茄鐘。</p>
+                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">計時器設定</h3>
+                <Toggle 
+                  label="計時器結束時通知我" 
+                  value={appSettings.timerEndNotify} 
+                  onToggle={() => updateSetting('timerEndNotify', !appSettings.timerEndNotify)} 
+                />
+                <NumberSelector 
+                  label="即將結束時長" 
+                  unit="分" 
+                  value={appSettings.timerWarnTime} 
+                  onChange={(val) => updateSetting('timerWarnTime', val)} 
+                />
+                <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">可用來協助你準備開始休息或開始下一個番茄鐘。</p>
               </div>
 
               <div>
                 <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">專注提醒</h3>
-                <Toggle label="啟用番茄鐘專注提醒" value={true} />
-                <div className="flex justify-between items-center bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
-                  <span className="text-sm font-bold text-gray-700">Duration (min)</span>
-                  <span className="text-gray-400 text-sm">10 &gt;</span>
-                </div>
-                <p className="text-[10px] text-gray-400 mt-2 px-2">專注提醒會發出通知音來提醒你保持專注，可在你容易分心時幫助你回神專注。</p>
+                <Toggle 
+                  label="啟用番茄鐘專注提醒" 
+                  value={appSettings.focusReminder} 
+                  onToggle={() => updateSetting('focusReminder', !appSettings.focusReminder)} 
+                />
+                <NumberSelector 
+                  label="提醒頻率" 
+                  unit="分" 
+                  value={appSettings.focusReminderInterval} 
+                  onChange={(val) => updateSetting('focusReminderInterval', val)} 
+                />
+                <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">專注提醒會發出輕微提示音來提醒你保持專注，可在你容易分心時幫助你回神。</p>
               </div>
 
               {/* 導覽重置 */}
               <div>
-                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">功能導覽</h3>
+                <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">幫助與導覽</h3>
                 <button
                   onClick={handleResetTour}
                   disabled={tourReset}
@@ -86,24 +136,35 @@ const SettingsView: React.FC<SettingsViewProps> = ({ navigateTo, onResetTour }) 
                       <p className="text-sm font-bold text-gray-700">
                         {tourReset ? '已重置，返回首頁即可觀看 ✓' : '重新觀看功能導覽'}
                       </p>
-                      <p className="text-[11px] text-gray-400">以氣泡方式逐一介紹各功能</p>
+                      <p className="text-[11px] text-gray-400 font-medium">以氣泡方式逐一介紹各功能</p>
                     </div>
                   </div>
+                  <ChevronRight size={18} className="text-gray-300" />
                 </button>
               </div>
             </>
           ) : (
             <div className="space-y-6">
                <div>
-                  <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">專注</h3>
-                  <Toggle label="開啟App 封鎖程式" value={true} />
+                  <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider font-black">專注時段 (Focus)</h3>
+                  <Toggle 
+                    label="開啟嚴格 App 封鎖" 
+                    value={appSettings.appBlockerFocus} 
+                    onToggle={() => updateSetting('appBlockerFocus', !appSettings.appBlockerFocus)} 
+                  />
+                  <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">開啟後，在專注期間將無法切換至其他娛樂頁面，直到計時結束。</p>
                </div>
                <div>
-                  <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider">休息</h3>
-                  <Toggle label="開啟App 封鎖程式" value={true} />
+                  <h3 className="text-xs font-bold text-gray-400 mb-4 uppercase tracking-wider font-black">休息時段 (Break)</h3>
+                  <Toggle 
+                    label="休息時限制娛樂 App" 
+                    value={appSettings.appBlockerBreak} 
+                    onToggle={() => updateSetting('appBlockerBreak', !appSettings.appBlockerBreak)} 
+                  />
+                  <p className="text-[10px] text-gray-400 mt-2 px-2 leading-relaxed">若您希望在休息時也能保持數位排毒，可以開啟此功能。</p>
                </div>
-               <button className="w-full py-4 bg-white text-red-500 rounded-3xl font-bold text-sm shadow-sm border border-red-50 border-gray-100">
-                 REFRESH APP BLOCKER
+               <button className="w-full py-5 bg-white text-gray-400 rounded-3xl font-black text-xs shadow-sm border border-gray-100 uppercase tracking-widest active:scale-95 transition-all">
+                 刷新封鎖引擎狀態
                </button>
             </div>
           )}

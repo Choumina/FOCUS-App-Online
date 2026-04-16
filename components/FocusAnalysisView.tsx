@@ -10,15 +10,20 @@ import { Clock, Zap, Target, TrendingUp, AlertCircle } from 'lucide-react';
 interface FocusAnalysisViewProps {
   navigateTo: (route: AppRoute) => void;
   focusLogs: FocusLog[];
+  activeSessionSeconds?: number;
 }
 
-const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focusLogs }) => {
+const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focusLogs, activeSessionSeconds = 0 }) => {
   const [timeScale, setTimeScale] = useState<'day' | 'week' | 'month'>('day');
+
+  // Convert active seconds to minutes for the chart
+  const activeMinutes = Math.floor(activeSessionSeconds / 60);
 
   // 處理數據：每日專注分鐘數
   const chartData = useMemo(() => {
     const now = new Date();
     const result = [];
+    const todayStr = now.toISOString().split('T')[0];
 
     if (timeScale === 'day') {
       // 最近 7 天
@@ -29,7 +34,13 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
         const dayName = d.toLocaleDateString('zh-TW', { weekday: 'short' });
         
         const dayLogs = focusLogs.filter(log => log.startTime.startsWith(dateStr));
-        const totalMinutes = dayLogs.reduce((acc, log) => acc + log.duration, 0);
+        let totalMinutes = dayLogs.reduce((acc, log) => acc + log.duration, 0);
+        
+        // Add live minutes if it's today
+        if (dateStr === todayStr) {
+          totalMinutes += activeMinutes;
+        }
+
         const interruptions = dayLogs.reduce((acc, log) => acc + log.interruptionCount, 0);
 
         result.push({
@@ -37,7 +48,8 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
           fullDate: dateStr,
           minutes: totalMinutes,
           interruptions: interruptions,
-          count: dayLogs.length
+          count: dayLogs.length + (dateStr === todayStr && activeMinutes > 0 ? 1 : 0),
+          isLive: dateStr === todayStr && activeMinutes > 0
         });
       }
     } else if (timeScale === 'week') {
@@ -53,9 +65,16 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
           return logDate >= start && logDate <= end;
         });
 
+        let totalWeekMinutes = weekLogs.reduce((acc, log) => acc + log.duration, 0);
+        
+        // Add live minutes if today falls in this week
+        if (now >= start && now <= end) {
+          totalWeekMinutes += activeMinutes;
+        }
+
         result.push({
           label: `W${4-i}`,
-          minutes: weekLogs.reduce((acc, log) => acc + log.duration, 0),
+          minutes: totalWeekMinutes,
           interruptions: weekLogs.reduce((acc, log) => acc + log.interruptionCount, 0),
         });
       }
@@ -70,23 +89,42 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
           return logDate.getMonth() === d.getMonth() && logDate.getFullYear() === d.getFullYear();
         });
 
+        let totalMonthMinutes = monthLogs.reduce((acc, log) => acc + log.duration, 0);
+        
+        // Add live minutes if today falls in this month
+        if (now.getMonth() === d.getMonth() && now.getFullYear() === d.getFullYear()) {
+          totalMonthMinutes += activeMinutes;
+        }
+
         result.push({
           label: monthName,
-          minutes: monthLogs.reduce((acc, log) => acc + log.duration, 0),
+          minutes: totalMonthMinutes,
           interruptions: monthLogs.reduce((acc, log) => acc + log.interruptionCount, 0),
         });
       }
     }
     return result;
-  }, [focusLogs, timeScale]);
+  }, [focusLogs, timeScale, activeMinutes]);
 
   // 計算連續專注天數 (Streak)
   const currentStreak = useMemo(() => {
-    if (!focusLogs || focusLogs.length === 0) return 0;
+    // Treat active session as a log for streak purposes
+    const effectiveLogs = [...focusLogs];
+    if (activeMinutes > 0) {
+      effectiveLogs.push({
+        id: 'active',
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        duration: activeMinutes,
+        interruptionCount: 0
+      });
+    }
+
+    if (effectiveLogs.length === 0) return 0;
     
     // 取得所有唯一的專注日期 (YCYY-MM-DD)
     const dates: string[] = Array.from(new Set<string>(
-      focusLogs
+      effectiveLogs
         .filter(log => log && log.startTime)
         .map(log => log.startTime.split('T')[0])
     )).sort((a, b) => b.localeCompare(a));
@@ -113,7 +151,7 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
       }
     }
     return streak;
-  }, [focusLogs]);
+  }, [focusLogs, activeMinutes]);
 
   const streakMessage = useMemo(() => {
     if (currentStreak === 0) return "開始您的第一場專注實驗吧！";
@@ -122,8 +160,11 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
     return `卓越的自律！您已連續 ${currentStreak} 天專注，正處於巔峰狀態！`;
   }, [currentStreak]);
 
-  const totalMinutes = useMemo(() => focusLogs.reduce((acc, log) => acc + log.duration, 0), [focusLogs]);
-  const avgFocusTime = useMemo(() => focusLogs.length > 0 ? Math.round(totalMinutes / focusLogs.length) : 0, [totalMinutes, focusLogs]);
+  const totalMinutes = useMemo(() => focusLogs.reduce((acc, log) => acc + log.duration, 0) + activeMinutes, [focusLogs, activeMinutes]);
+  const avgFocusTime = useMemo(() => {
+    const sessionCount = focusLogs.length + (activeMinutes > 0 ? 1 : 0);
+    return sessionCount > 0 ? Math.round(totalMinutes / sessionCount) : 0;
+  }, [totalMinutes, focusLogs.length, activeMinutes]);
   const totalInterruption = useMemo(() => focusLogs.reduce((acc, log) => acc + log.interruptionCount, 0), [focusLogs]);
 
   return (
@@ -146,12 +187,15 @@ const FocusAnalysisView: React.FC<FocusAnalysisViewProps> = ({ navigateTo, focus
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-5 rounded-[2rem] text-white shadow-xl shadow-blue-100 relative overflow-hidden group">
+          <div className={`bg-gradient-to-br transition-all duration-500 ${activeMinutes > 0 ? 'from-indigo-500 to-indigo-600 shadow-indigo-100' : 'from-blue-500 to-blue-600 shadow-blue-100'} p-5 rounded-[2rem] text-white shadow-xl relative overflow-hidden group`}>
             <div className="relative z-10">
-              <div className="text-[10px] font-bold opacity-80 uppercase tracking-widest mb-1">Total Focus</div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Total Focus</div>
+                {activeMinutes > 0 && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
+              </div>
               <div className="text-3xl font-black">{Math.floor(totalMinutes / 60)}h {totalMinutes % 60}m</div>
             </div>
-            <Clock className="absolute -right-2 -bottom-2 w-16 h-16 opacity-10 group-hover:scale-110 transition-transform" />
+            <Clock className={`absolute -right-2 -bottom-2 w-16 h-16 opacity-10 group-hover:scale-110 transition-transform ${activeMinutes > 0 ? 'animate-spin-slow' : ''}`} />
           </div>
           <div className="bg-white border border-gray-100 p-5 rounded-[2rem] shadow-xl shadow-gray-100/50 relative overflow-hidden group">
              <div className="relative z-10">

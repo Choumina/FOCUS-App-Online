@@ -21,6 +21,7 @@ interface HomeViewProps {
     avatar: string;
   };
   focusLogs: any[];
+  activeSessionSeconds?: number;
   isTourVisible?: boolean;
   timerTimeLeft: number;
   visibleSubSections: Record<string, string[]>;
@@ -80,7 +81,7 @@ const SortableSubItem = ({ id, children }: { id: string; children: React.ReactNo
   );
 };
 
-const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, archiveTask, calendarEvents, sections, setSections, userProfile, focusLogs, isTourVisible, timerTimeLeft, visibleSubSections, setVisibleSubSections }) => {
+const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, archiveTask, calendarEvents, sections, setSections, userProfile, focusLogs, activeSessionSeconds = 0, isTourVisible, timerTimeLeft, visibleSubSections, setVisibleSubSections }) => {
 
   const [showAddMenu, setShowAddMenu] = useState<string | null>(null);
   const [confirmTask, setConfirmTask] = useState<Task | null>(null);
@@ -122,14 +123,16 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, arch
     
     const todayStr = new Date().toISOString().split('T')[0];
     const todaysLogs = focusLogs.filter(l => l && l.startTime && l.startTime.startsWith(todayStr));
-    const totalMins = todaysLogs.reduce((acc, l) => acc + (l.duration || 0), 0);
+    const activeMinutes = Math.floor(activeSessionSeconds / 60);
+    const totalMins = todaysLogs.reduce((acc, l) => acc + (l.duration || 0), 0) + activeMinutes;
     
     return {
       hours: Math.floor(totalMins / 60),
       minutes: totalMins % 60,
-      totalMins
+      totalMins,
+      isLive: activeMinutes > 0
     };
-  }, [focusLogs]);
+  }, [focusLogs, activeSessionSeconds]);
 
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -375,7 +378,10 @@ const HomeView: React.FC<HomeViewProps> = ({ navigateTo, tasks, toggleTask, arch
                               <BarChart2 size={24} />
                            </div>
                            <div className="text-right">
-                              <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">Today's Focus</div>
+                              <div className="flex items-center justify-end gap-1.5 mb-1">
+                                <div className="text-[10px] font-black opacity-60 uppercase tracking-widest">Today's Focus</div>
+                                {todayFocusStats.isLive && <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
+                              </div>
                               <div className="text-xl font-black">
                                  {todayFocusStats.hours}h {todayFocusStats.minutes}m
                               </div>

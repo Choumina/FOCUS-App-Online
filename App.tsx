@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppRoute, Task, CalendarEvent, FocusLog, UserIdentity } from './types';
 import { Plus, Sparkles } from 'lucide-react';
 import { supabase, handleSupabaseError, OperationType } from './supabase';
@@ -71,16 +71,25 @@ const App: React.FC = () => {
     calendar: ['calendar_card'],
     games: ['pets', 'race', 'ranking']
   });
+  const [appSettings, setAppSettings] = useState({
+    timerEndNotify: true,
+    timerWarnTime: 2,
+    focusReminder: true,
+    focusReminderInterval: 10,
+    appBlockerFocus: true,
+    appBlockerBreak: false
+  });
 
   // Timer States (Shared across Home & Focus)
-  const [timerTotalTime, setTimerTotalTime] = useState(2400);
-  const [timerTimeLeft, setTimerTimeLeft] = useState(2400);
+  const [timerTotalTime, setTimerTotalTime] = useState(1500);
+  const [timerTimeLeft, setTimerTimeLeft] = useState(1500);
   const [timerIsActive, setTimerIsActive] = useState(false);
   const [timerIsStrict, setTimerIsStrict] = useState(false);
   const [timerInterruptionCount, setTimerInterruptionCount] = useState(0);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [sessionStartTime, setSessionStartTime] = useState<string | null>(null);
 
   const lastFetchedUserId = React.useRef<string | null>(null);
 
@@ -238,6 +247,7 @@ const App: React.FC = () => {
         if (data.home_config) setHomeSections(data.home_config);
         if (data.placed_items) setPlacedItems(data.placed_items);
         if (storedMeta._visibleSubSections) setVisibleSubSections(storedMeta._visibleSubSections);
+        if (storedMeta._appSettings) setAppSettings(storedMeta._appSettings);
         if (data.focus_logs) setFocusLogs(data.focus_logs);
         else if (storedMeta._focusLogs) setFocusLogs(storedMeta._focusLogs);
 
@@ -298,6 +308,14 @@ const App: React.FC = () => {
               calendar: ['calendar_card'],
               games: ['pets', 'race', 'ranking']
             },
+            _appSettings: {
+              timerEndNotify: true,
+              timerWarnTime: 2,
+              focusReminder: true,
+              focusReminderInterval: 10,
+              appBlockerFocus: true,
+              appBlockerBreak: false
+            },
             registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
           }
         };
@@ -350,6 +368,7 @@ const App: React.FC = () => {
             _authProvider: user.app_metadata?.provider || 'email',
             _focusLogs: focusLogs,
             _visibleSubSections: visibleSubSections,
+            _appSettings: appSettings,
             _onboardingDone: hasCompletedOnboarding,
             _tourDone: hasCompletedTour
           }
@@ -364,7 +383,7 @@ const App: React.FC = () => {
     };
     const timer = setTimeout(syncData, 2000); // Debounce sync
     return () => clearTimeout(timer);
-  }, [coins, tasks, homeSections, placedItems, userProfile, focusLogs, user, isLoadingData, visibleSubSections]);
+  }, [coins, tasks, homeSections, placedItems, userProfile, focusLogs, user, isLoadingData, visibleSubSections, appSettings]);
 
   const MAX_COINS = 9999;
 
@@ -394,19 +413,53 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
   }, [currentRoute]);
 
+  const saveFocusLog = useCallback((seconds: number) => {
+    if (seconds < 60) { // 1 minute threshold
+      setSessionStartTime(null);
+      setTimerInterruptionCount(0);
+      return;
+    }
+
+    const endTime = new Date().toISOString();
+    const startTime = sessionStartTime || new Date(Date.now() - seconds * 1000).toISOString();
+    const duration = Math.round(seconds / 60);
+
+    const newLog: FocusLog = {
+      id: crypto.randomUUID(),
+      startTime,
+      endTime,
+      duration,
+      interruptionCount: timerInterruptionCount
+    };
+
+    setFocusLogs(prev => [...prev, newLog]);
+    setTimerInterruptionCount(0);
+    setSessionStartTime(null);
+  }, [sessionStartTime, timerInterruptionCount, setFocusLogs]);
+
   useEffect(() => {
     let interval: any = null;
     if (timerIsActive && timerTimeLeft > 0) {
+      if (!sessionStartTime) setSessionStartTime(new Date().toISOString());
       interval = setInterval(() => {
         setTimerTimeLeft(t => t - 1);
       }, 1000);
     } else if (timerTimeLeft === 0 && timerIsActive) {
       setTimerIsActive(false);
       setCoins(c => c + 500);
+      saveFocusLog(timerTotalTime);
       alert("太棒了！專注時段已結束。");
     }
     return () => clearTimeout(interval);
-  }, [timerIsActive, timerTimeLeft]);
+  }, [timerIsActive, timerTimeLeft, timerTotalTime, sessionStartTime, saveFocusLog]);
+
+  // Handle manual stop/pause logging
+  useEffect(() => {
+    if (!timerIsActive && sessionStartTime && timerTimeLeft > 0) {
+      const secondsSpent = timerTotalTime - timerTimeLeft;
+      saveFocusLog(secondsSpent);
+    }
+  }, [timerIsActive, sessionStartTime, timerTimeLeft, timerTotalTime, saveFocusLog]);
 
   const navigateTo = (route: AppRoute) => {
     setCurrentRoute(route);
@@ -491,6 +544,7 @@ const App: React.FC = () => {
           setVisibleSubSections={setVisibleSubSections}
           userProfile={userProfile}
           focusLogs={focusLogs}
+          activeSessionSeconds={timerIsActive ? (timerTotalTime - timerTimeLeft) : 0}
           isTourVisible={isTourVisible}
           timerTimeLeft={timerTimeLeft}
           timerTotalTime={timerTotalTime}
@@ -549,7 +603,12 @@ const App: React.FC = () => {
       case AppRoute.LEADERBOARD:
         return <LeaderboardView navigateTo={navigateTo} userProfile={userProfile} coins={coins} />;
       case AppRoute.SETTINGS:
-        return <SettingsView navigateTo={navigateTo} onResetTour={handleResetTour} />;
+        return <SettingsView 
+          navigateTo={navigateTo} 
+          onResetTour={handleResetTour}
+          appSettings={appSettings}
+          setAppSettings={setAppSettings}
+        />;
       case AppRoute.AI_CHAT:
         return <AIChatView navigateTo={navigateTo} setCalendarEvents={setCalendarEvents} tasks={tasks} />;
       case AppRoute.CALENDAR_DETAIL:
@@ -573,7 +632,11 @@ const App: React.FC = () => {
       case AppRoute.CHANGE_EMAIL:
         return <ChangeEmailView navigateTo={navigateTo} userProfile={userProfile} setUserProfile={setUserProfile} />;
       case AppRoute.FOCUS_ANALYSIS:
-        return <FocusAnalysisView navigateTo={navigateTo} focusLogs={focusLogs} />;
+        return <FocusAnalysisView 
+          navigateTo={navigateTo} 
+          focusLogs={focusLogs} 
+          activeSessionSeconds={timerIsActive ? (timerTotalTime - timerTimeLeft) : 0}
+        />;
       case AppRoute.CALENDAR_ADMIN:
         return <CalendarAdminView navigateTo={navigateTo} events={calendarEvents} setEvents={setCalendarEvents} />;
       default:
@@ -590,6 +653,7 @@ const App: React.FC = () => {
           setVisibleSubSections={setVisibleSubSections}
           userProfile={userProfile}
           focusLogs={focusLogs}
+          activeSessionSeconds={timerIsActive ? (timerTotalTime - timerTimeLeft) : 0}
           isTourVisible={isTourVisible}
           timerTimeLeft={timerTimeLeft}
           timerTotalTime={timerTotalTime}
