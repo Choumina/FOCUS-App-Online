@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AppRoute, Task, CalendarEvent, FocusLog, UserIdentity } from './types';
+import { AppRoute, Task, CalendarEvent, FocusLog, UserIdentity, UserProfile, PetItem } from './types';
 import { Plus, Sparkles } from 'lucide-react';
 import { supabase, handleSupabaseError, OperationType } from './supabase';
 import { User } from '@supabase/supabase-js';
@@ -64,7 +64,7 @@ const App: React.FC = () => {
   const [purchasedBackgrounds, setPurchasedBackgrounds] = useState<string[]>([]);
   const [areaBackgrounds, setAreaBackgrounds] = useState<Record<string, string>>({});
   const [areaNames, setAreaNames] = useState<Record<string, string>>({ blue: '專案區域 A', yellow: '專案區域 B', green: '專案區域 C' });
-  const [userProfile, setUserProfile] = useState({
+  const [userProfile, setUserProfile] = useState<UserProfile>({
     name: 'Focus User',
     bio: '專注於每一刻，成就更好的自己。',
     avatar: 'https://picsum.photos/seed/user/200',
@@ -76,11 +76,7 @@ const App: React.FC = () => {
     registrationDate: new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
   });
   const [lastBetAmount, setLastBetAmount] = useState(100);
-  const [placedItems, setPlacedItems] = useState<{ 
-    id: string, x: number, y: number, char: string, isReacting: boolean, clickCount: number, areaId: string,
-    hunger: number, thirst: number, affection: number, isDead: boolean,
-    dailyFood: number, dailyWater: number, dailyAffection: number, lastCareDate: string
-  }[]>([]);
+  const [placedItems, setPlacedItems] = useState<PetItem[]>([]);
   const [visibleSubSections, setVisibleSubSections] = useState<Record<string, string[]>>({
     focus: ['tasks', 'timer', 'analysis'],
     calendar: ['calendar_card'],

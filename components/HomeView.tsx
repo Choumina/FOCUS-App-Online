@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AppRoute, Task, CalendarEvent } from '../types';
+import { AppRoute, Task, CalendarEvent, UserProfile, FocusLog } from '../types';
 import { Calendar as CalendarIcon, Plus, GripVertical, User, BarChart2, Award, Zap } from 'lucide-react';
 import ConfirmationModal from './ConfirmationModal';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -15,12 +15,8 @@ interface HomeViewProps {
   calendarEvents: CalendarEvent[];
   sections: string[];
   setSections: React.Dispatch<React.SetStateAction<string[]>>;
-  userProfile: {
-    name: string;
-    bio: string;
-    avatar: string;
-  };
-  focusLogs: any[];
+  userProfile: UserProfile;
+  focusLogs: FocusLog[];
   activeSessionSeconds?: number;
   isTourVisible?: boolean;
   timerTimeLeft: number;

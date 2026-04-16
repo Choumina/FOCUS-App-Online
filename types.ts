@@ -1,5 +1,34 @@
 export type UserIdentity = 'high_school' | 'university' | 'other';
 
+export interface UserProfile {
+  name: string;
+  bio: string;
+  avatar: string;
+  level: number;
+  winsTowardsNextLevel: number;
+  visitedRoutes: AppRoute[];
+  email: string;
+  identity: UserIdentity;
+  registrationDate: string;
+}
+
+export interface PetItem {
+  id: string;
+  x: number;
+  y: number;
+  char: string;
+  isReacting: boolean;
+  clickCount: number;
+  areaId: string;
+  hunger: number;
+  thirst: number;
+  affection: number;
+  isDead: boolean;
+  dailyFood: number;
+  dailyWater: number;
+  dailyAffection: number;
+  lastCareDate: string;
+}
 export interface Task {
   id: string;
   title: string;

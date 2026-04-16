@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { AppRoute } from '../types';
+import { AppRoute, UserProfile } from '../types';
 import { ChevronLeft, Play, Zap, Flag, Coins, Star, Ticket, QrCode, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -10,7 +9,7 @@ interface RaceTrackViewProps {
   setCoins: React.Dispatch<React.SetStateAction<number>>;
   lastBetAmount: number;
   setLastBetAmount: React.Dispatch<React.SetStateAction<number>>;
-  setUserProfile: React.Dispatch<React.SetStateAction<any>>;
+  setUserProfile: React.Dispatch<React.SetStateAction<UserProfile>>;
   isPremium: boolean;
 }
 
@@ -65,7 +64,7 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
 
   // Ad Countdown Logic
   useEffect(() => {
-    let timer: any;
+    let timer: ReturnType<typeof setInterval>;
     if (showAdOverlay && adCountdown > 0) {
       timer = setInterval(() => {
         setAdCountdown(prev => prev - 1);
@@ -74,11 +73,11 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
       setShowAdOverlay(false);
       navigateTo(AppRoute.HOME);
     }
-    return () => clearInterval(timer);
+    return () => clearInterval(timer!);
   }, [showAdOverlay, adCountdown, navigateTo]);
 
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval>;
     if (racing) {
       interval = setInterval(() => {
         setPositions(prev => {
@@ -88,7 +87,7 @@ const RaceTrackView: React.FC<RaceTrackViewProps> = ({ navigateTo, coins, setCoi
             const winner = next.indexOf(Math.max(...next));
             if (winner === selectedHorse) {
               setCoins(c => c + bet * 2);
-              setUserProfile((prev: any) => ({
+              setUserProfile((prev: UserProfile) => ({
                 ...prev,
                 winsTowardsNextLevel: (prev.winsTowardsNextLevel || 0) + 1
               }));

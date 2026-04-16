@@ -1,21 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { AppRoute, FocusLog } from '../types';
+import { AppRoute, FocusLog, UserProfile, PetItem } from '../types';
 import ViewHeader from './ViewHeader';
 import { supabase } from '../supabase';
 import { Loader2, Trophy, Users, Search, UserPlus, UserMinus, X, Clock, Heart, Star, Coins } from 'lucide-react';
 
 interface LeaderboardViewProps {
   navigateTo: (route: AppRoute) => void;
-  userProfile: {
-    name: string;
-    avatar: string;
-    level: number;
-    id?: string;
-  };
+  userProfile: UserProfile & { id?: string };
   coins: number;
   setCoins: (updater: React.SetStateAction<number>) => void;
   focusLogs: FocusLog[];
-  placedItems: any[];
+  placedItems: PetItem[];
 }
 
 type RankCategory = 'points' | 'coins' | 'focus' | 'level' | 'pet';

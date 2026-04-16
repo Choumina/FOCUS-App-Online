@@ -13,7 +13,7 @@ interface Message {
   text: string;
   type?: 'form_schedule' | 'form_task' | 'form_matrix_confirm' | 'form_matrix_input';
   isSubmitted?: boolean;
-  matrixData?: any[];
+  matrixData?: { title: string; importance: number; urgency: number }[];
 }
 
 interface Conversation {
@@ -28,7 +28,7 @@ const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
 
   // Group tasks by their coordinates to handle overlaps
   const groupedDataMap = new Map<string, { x: number, y: number, tasks: string[] }>();
-  
+
   data.forEach(item => {
     const key = `${item.urgency}-${item.importance}`;
     if (groupedDataMap.has(key)) {
@@ -77,19 +77,19 @@ const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={{ top: 30, right: 30, bottom: 30, left: 30 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} horizontal={false} />
-          <XAxis 
-            type="number" 
-            dataKey="x" 
-            name="緊急度" 
-            domain={[0, 6]} 
+          <XAxis
+            type="number"
+            dataKey="x"
+            name="緊急度"
+            domain={[0, 6]}
             ticks={[1, 2, 3, 4, 5]}
             label={{ value: '緊急度', position: 'insideBottomRight', offset: -10, fontSize: 10, fontWeight: 'bold' }}
           />
-          <YAxis 
-            type="number" 
-            dataKey="y" 
-            name="重要性" 
-            domain={[0, 6]} 
+          <YAxis
+            type="number"
+            dataKey="y"
+            name="重要性"
+            domain={[0, 6]}
             ticks={[1, 2, 3, 4, 5]}
             label={{ value: '重要性', position: 'insideLeft', angle: -90, offset: 10, fontSize: 10, fontWeight: 'bold' }}
           />
@@ -102,7 +102,7 @@ const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
           </Scatter>
         </ScatterChart>
       </ResponsiveContainer>
-      
+
       {/* Quadrant Labels */}
       <div className="absolute inset-0 pointer-events-none flex flex-wrap opacity-20 font-black text-[10px] uppercase tracking-widest p-10">
         <div className="w-1/2 h-1/2 flex items-start justify-center pt-2">重要不緊急</div>
@@ -117,7 +117,7 @@ const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
     <div className="mt-4 relative group">
       <div className="border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
         {renderChart(false)}
-        <button 
+        <button
           onClick={() => setIsModalOpen(true)}
           className="absolute top-4 right-4 p-2 bg-white/80 backdrop-blur-sm rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity"
         >
@@ -126,15 +126,15 @@ const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
       </div>
 
       {isModalOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
           onClick={() => setIsModalOpen(false)}
         >
-          <div 
+          <div
             className="bg-white w-full max-w-2xl rounded-[2.5rem] p-6 md:p-10 relative animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            <button 
+            <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-4 right-4 md:top-8 md:right-8 p-3 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors z-10"
             >
@@ -172,7 +172,7 @@ const MatrixChart: React.FC<{ data: any[] }> = ({ data }) => {
                 <div className="text-[10px] text-gray-400">不重要且不緊急，可暫緩處理。</div>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setIsModalOpen(false)}
               className="w-full mt-8 py-4 bg-gray-900 text-white rounded-2xl font-bold md:hidden"
             >
@@ -190,7 +190,7 @@ const AIChatView: React.FC<{
   setCalendarEvents?: React.Dispatch<React.SetStateAction<CalendarEvent[]>>;
   tasks?: Task[];
   isPremium: boolean;
-  userIdentity?: string;
+  userIdentity?: UserIdentity;
 }> = ({ navigateTo, setCalendarEvents, tasks = [], isPremium, userIdentity }) => {
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
@@ -209,14 +209,13 @@ const AIChatView: React.FC<{
       updatedAt: Date.now()
     }];
   });
-  
-  const [currentConvId, setCurrentConvId] = useState<string>('default');
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentConvId, setCurrentConvId] = useState<string>('default');
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showEnterHint, setShowEnterHint] = useState(false);
-  
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   // Current messages derived from conversations
   const currentConversation = conversations.find(c => c.id === currentConvId);
   const messages = currentConversation?.messages || [];
@@ -231,7 +230,7 @@ const AIChatView: React.FC<{
     returnTime: '',
     goals: ''
   });
-  
+
   const [taskForm, setTaskForm] = useState({
     taskName: '',
     format: '',
@@ -244,7 +243,7 @@ const AIChatView: React.FC<{
   }>({
     tasks: []
   });
-  
+
   const lastEnterTime = useRef<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -275,53 +274,27 @@ const AIChatView: React.FC<{
     }));
   };
 
-  const handleNewChat = () => {
-    const newId = Date.now().toString();
-    const newConv: Conversation = {
-      id: newId,
-      title: '新對話',
-      messages: [],
-      updatedAt: Date.now()
-    };
-    setConversations(prev => [newConv, ...prev]);
-    setCurrentConvId(newId);
-    setIsSidebarOpen(false);
-    setInput('');
-  };
-
-  const handleDeleteChat = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setDeletingConvId(id);
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDeleteChat = () => {
-    if (deletingConvId) {
-      setConversations(prev => prev.filter(c => c.id !== deletingConvId));
-      if (currentConvId === deletingConvId) {
-        setCurrentConvId(null);
-      }
-      setShowDeleteConfirm(false);
-      setDeletingConvId(null);
-    }
+  const handleClearRecords = () => {
+    updateMessages([]);
+    setShowClearConfirm(false);
   };
 
 
   const handleSend = async (customMsg?: string) => {
     const msgToSend = customMsg || input.trim();
     if (!msgToSend) return;
-    
+
     if (!customMsg) setInput('');
     setShowEnterHint(false);
-    
+
     // Add user message
     updateMessages(prev => [...prev, { role: 'user', text: msgToSend }]);
     setIsTyping(true);
 
     if (msgToSend === '分析日常行程') {
       setTimeout(() => {
-        updateMessages(prev => [...prev, { 
-          role: 'bot', 
+        updateMessages(prev => [...prev, {
+          role: 'bot',
           text: '好的～請幫我填入下列的資料！',
           type: 'form_schedule'
         }]);
@@ -330,8 +303,8 @@ const AIChatView: React.FC<{
       return;
     } else if (msgToSend === '拆解學習任務') {
       setTimeout(() => {
-        updateMessages(prev => [...prev, { 
-          role: 'bot', 
+        updateMessages(prev => [...prev, {
+          role: 'bot',
           text: '當然沒問題，你想拆解的任務是什麼呢？\n\n請告訴我它最終要以何種形式呈現呢？\n以及它開始執行、結束執行的時間。',
           type: 'form_task'
         }]);
@@ -346,9 +319,9 @@ const AIChatView: React.FC<{
           urgency: 3
         }));
         setMatrixForm({ tasks: currentTasks });
-        
-        updateMessages(prev => [...prev, { 
-          role: 'bot', 
+
+        updateMessages(prev => [...prev, {
+          role: 'bot',
           text: `我看到你目前有 ${currentTasks.length} 個待辦事項：\n${currentTasks.map(t => `• ${t.title}`).join('\n')}\n\n請問未來的任務是否只有這些呢？`,
           type: 'form_matrix_confirm'
         }]);
@@ -357,32 +330,33 @@ const AIChatView: React.FC<{
       return;
     }
 
-    const response = await chatWithAssistant(msgToSend, messages);
+    const history = messages.map(m => ({ role: m.role, text: m.text }));
+    const response = await chatWithAssistant(msgToSend, history);
     let botText = response.text;
-    
+
     // Check for high school portfolio link
     if (userIdentity === 'high_school' && (msgToSend.includes('學習歷程') || botText.includes('學習歷程'))) {
       if (!botText.includes('shs.k12ea.gov.tw')) {
-        botText += '\n\n💡 相關連結：妳可以參考 [教育部學習歷程檔案數位學習課程](https://shs.k12ea.gov.tw/public/12basic/e-portfolio/index.html) 獲得更多細節。';
+        botText += '\n\n💡 相關連結：你可以參考 [教育部學習歷程檔案數位學習課程](https://shs.k12ea.gov.tw/public/12basic/e-portfolio/index.html) 獲得更多細節。';
       }
     }
 
     updateMessages(prev => [...prev, { role: 'bot', text: botText }]);
-    
+
     if (response.events && response.events.length > 0 && setCalendarEvents) {
       setCalendarEvents(prev => {
         const newEvents = [...prev];
         const HOUR_HEIGHT = 40;
-        response.events.forEach((e: any) => {
+        response.events.forEach((e: { title: string; startTime?: string; endTime?: string; date?: string }) => {
           if (e.startTime && e.endTime) {
             const startParts = e.startTime.trim().split(':');
             const endParts = e.endTime.trim().split(':');
             if (startParts.length === 2 && endParts.length === 2) {
               const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
               const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
-              
+
               const dateToUse = e.date || new Date().toISOString().split('T')[0];
-              
+
               newEvents.push({
                 id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
                 title: e.title,
@@ -402,44 +376,44 @@ const AIChatView: React.FC<{
 
   const handleFormSubmit = async (type: 'schedule' | 'task' | 'matrix') => {
     setIsTyping(true);
-    
+
     let prompt = '';
     if (type === 'schedule') {
       prompt = `使用者提供了日常行程資料：\n1. 起床時間：${scheduleForm.wakeTime}\n2. 睡覺時間：${scheduleForm.sleepTime}\n3. 睡眠時長需求：${scheduleForm.sleepNeeded}\n4. 平日通勤時間：${scheduleForm.commuteTime}\n5. 出門時間：${scheduleForm.departureTime}\n6. 到家時間：${scheduleForm.returnTime}\n7. 額外目標：${scheduleForm.goals}\n\n請分析此行程並給予具體的生活建議與進度安排。回覆應包含對睡眠充足度與通勤壓力的點評。`;
-      updateMessages(prev => prev.map((m, idx) => 
+      updateMessages(prev => prev.map((m, idx) =>
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     } else if (type === 'task') {
       prompt = `使用者提供了學習任務資料：\n1. 拆解任務：${taskForm.taskName}\n2. 呈現形式：${taskForm.format}\n3. 開始執行時間：${taskForm.startTime}\n4. 結束執行時間：${taskForm.endTime}\n\n請根據要求的格式與時間窗口，將此任務拆解為可執行的步驟，並安排進入行程。`;
-      updateMessages(prev => prev.map((m, idx) => 
+      updateMessages(prev => prev.map((m, idx) =>
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     } else if (type === 'matrix') {
       prompt = `使用者提供了任務重要性與緊急度評分（1-5）：\n${matrixForm.tasks.map(t => `- ${t.title}: 重要性 ${t.importance}, 緊急度 ${t.urgency}`).join('\n')}\n\n請進行艾森豪矩陣分析並給予執行建議。`;
-      updateMessages(prev => prev.map((m, idx) => 
+      updateMessages(prev => prev.map((m, idx) =>
         idx === prev.length - 1 ? { ...m, isSubmitted: true } : m
       ));
     }
 
     const response = await chatWithAssistant(prompt, messages);
-    updateMessages(prev => [...prev, { 
-      role: 'bot', 
+    updateMessages(prev => [...prev, {
+      role: 'bot',
       text: response.text,
-      matrixData: response.matrixData 
+      matrixData: response.matrixData
     }]);
-    
+
     if (response.events && response.events.length > 0 && setCalendarEvents) {
       setCalendarEvents(prev => {
         const newEvents = [...prev];
         const HOUR_HEIGHT = 40;
-        response.events.forEach((e: any) => {
+        response.events.forEach((e: { title: string; startTime?: string; endTime?: string; date?: string }) => {
           if (e.startTime && e.endTime) {
             const startParts = e.startTime.trim().split(':');
             const endParts = e.endTime.trim().split(':');
             if (startParts.length === 2 && endParts.length === 2) {
               const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
               const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
-              
+
               const dateToUse = e.date || new Date().toISOString().split('T')[0];
 
               newEvents.push({
@@ -509,21 +483,21 @@ const AIChatView: React.FC<{
       <div className="flex-1 flex flex-col min-w-0 bg-white relative">
         <header className="px-4 h-16 flex items-center justify-between border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <div className="flex items-center gap-3">
-             <button onClick={() => navigateTo(AppRoute.HOME)} className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
-               <Home size={22} />
-             </button>
-             <div>
-                <h1 className="text-lg font-black text-gray-800 tracking-tight">FOCUS AI</h1>
-                <div className="flex items-center gap-1.5">
-                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Always Persistent</p>
-                </div>
-             </div>
+            <button onClick={() => navigateTo(AppRoute.HOME)} className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
+              <Home size={22} />
+            </button>
+            <div>
+              <h1 className="text-lg font-black text-gray-800 tracking-tight">FOCUS AI</h1>
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Always Persistent</p>
+              </div>
+            </div>
           </div>
-          <button 
-             onClick={() => updateMessages([])}
-             className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
-             title="清空對話紀錄"
+          <button
+            onClick={() => setShowClearConfirm(true)}
+            className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-95"
+            title="清空對話紀錄"
           >
             <RotateCcw size={18} />
           </button>
@@ -541,7 +515,7 @@ const AIChatView: React.FC<{
                   <Zap size={20} className="text-yellow-500" fill="currentColor" />
                 </div>
               </div>
-              
+
               <div className="space-y-4">
                 <h2 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter">我是 FOCUS AI</h2>
                 <p className="text-gray-500 text-base font-medium leading-relaxed max-w-md mx-auto">
@@ -557,7 +531,7 @@ const AIChatView: React.FC<{
                   { title: '任務重要性排序', desc: '使用艾森豪矩陣進行數位化分析', color: 'purple' },
                   { title: '制定讀書計畫', desc: '幫你規劃考前或專題的時程表', color: 'pink' }
                 ].map((s, idx) => (
-                  <button 
+                  <button
                     key={idx}
                     onClick={() => handleSuggestionClick(s.title)}
                     className="p-5 bg-white border border-gray-100 rounded-3xl text-left hover:border-blue-300 hover:shadow-xl hover:shadow-blue-50/50 transition-all group relative overflow-hidden active:scale-95"
@@ -588,11 +562,11 @@ const AIChatView: React.FC<{
                       <div className={`px-5 py-4 rounded-[2rem] text-sm md:text-base font-medium leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-gray-100 text-gray-800 rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'}`}>
                         {m.text}
                         {m.role === 'bot' && m.matrixData && <MatrixChart data={m.matrixData} />}
-                        
+
                         {m.role === 'bot' && m.type === 'form_matrix_confirm' && !m.isSubmitted && (
                           <div className="mt-6 flex gap-3">
-                             <button onClick={() => handleSend('是的，只有這些。')} className="flex-1 py-3 bg-blue-500 text-white rounded-2xl text-xs font-bold shadow-lg">是的</button>
-                             <button onClick={() => handleSend('不，我還有其他任務。')} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">要新增</button>
+                            <button onClick={() => handleSend('是的，只有這些。')} className="flex-1 py-3 bg-blue-500 text-white rounded-2xl text-xs font-bold shadow-lg">是的</button>
+                            <button onClick={() => handleSend('不，我還有其他任務。')} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl text-xs font-bold">要新增</button>
                           </div>
                         )}
 
@@ -600,23 +574,23 @@ const AIChatView: React.FC<{
                           <div className="mt-6 space-y-4">
                             {/* Matrix Input Form components as seen in the original code but rendered within the message bubble */}
                             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden text-xs">
-                               {matrixForm.tasks.map((task, idx) => (
-                                 <div key={idx} className="p-3 border-b border-gray-50 flex items-center justify-between">
-                                   <span className="font-bold truncate max-w-[100px]">{task.title}</span>
-                                   <div className="flex gap-2">
-                                     <input type="number" min="1" max="5" value={task.importance} onChange={e => {
-                                       const newTasks = [...matrixForm.tasks];
-                                       newTasks[idx].importance = parseInt(e.target.value) || 1;
-                                       setMatrixForm({ tasks: newTasks });
-                                     }} className="w-8 p-1 text-center bg-gray-50 rounded" />
-                                     <input type="number" min="1" max="5" value={task.urgency} onChange={e => {
-                                       const newTasks = [...matrixForm.tasks];
-                                       newTasks[idx].urgency = parseInt(e.target.value) || 1;
-                                       setMatrixForm({ tasks: newTasks });
-                                     }} className="w-8 p-1 text-center bg-gray-50 rounded" />
-                                   </div>
-                                 </div>
-                               ))}
+                              {matrixForm.tasks.map((task, idx) => (
+                                <div key={idx} className="p-3 border-b border-gray-50 flex items-center justify-between">
+                                  <span className="font-bold truncate max-w-[100px]">{task.title}</span>
+                                  <div className="flex gap-2">
+                                    <input type="number" min="1" max="5" value={task.importance} onChange={e => {
+                                      const newTasks = [...matrixForm.tasks];
+                                      newTasks[idx].importance = parseInt(e.target.value) || 1;
+                                      setMatrixForm({ tasks: newTasks });
+                                    }} className="w-8 p-1 text-center bg-gray-50 rounded" />
+                                    <input type="number" min="1" max="5" value={task.urgency} onChange={e => {
+                                      const newTasks = [...matrixForm.tasks];
+                                      newTasks[idx].urgency = parseInt(e.target.value) || 1;
+                                      setMatrixForm({ tasks: newTasks });
+                                    }} className="w-8 p-1 text-center bg-gray-50 rounded" />
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                             <button onClick={() => handleFormSubmit('matrix')} className="w-full py-3 bg-blue-600 text-white rounded-2xl text-xs font-black">產生分析矩陣</button>
                           </div>
@@ -625,25 +599,25 @@ const AIChatView: React.FC<{
                         {m.role === 'bot' && m.type === 'form_schedule' && !m.isSubmitted && (
                           <div className="mt-6 space-y-3">
                             <div className="grid grid-cols-2 gap-2">
-                                <input type="text" placeholder="起床時間 (如 07:00)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.wakeTime} onChange={e => setScheduleForm({...scheduleForm, wakeTime: e.target.value})} />
-                                <input type="text" placeholder="睡覺時間 (如 23:00)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.sleepTime} onChange={e => setScheduleForm({...scheduleForm, sleepTime: e.target.value})} />
-                                <input type="text" placeholder="睡眠時長需求 (小時)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.sleepNeeded} onChange={e => setScheduleForm({...scheduleForm, sleepNeeded: e.target.value})} />
-                                <input type="text" placeholder="平日通勤時間 (分)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.commuteTime} onChange={e => setScheduleForm({...scheduleForm, commuteTime: e.target.value})} />
-                                <input type="text" placeholder="出門時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.departureTime} onChange={e => setScheduleForm({...scheduleForm, departureTime: e.target.value})} />
-                                <input type="text" placeholder="到家時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.returnTime} onChange={e => setScheduleForm({...scheduleForm, returnTime: e.target.value})} />
+                              <input type="text" placeholder="起床時間 (如 07:00)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.wakeTime} onChange={e => setScheduleForm({ ...scheduleForm, wakeTime: e.target.value })} />
+                              <input type="text" placeholder="睡覺時間 (如 23:00)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.sleepTime} onChange={e => setScheduleForm({ ...scheduleForm, sleepTime: e.target.value })} />
+                              <input type="text" placeholder="睡眠時長需求 (小時)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.sleepNeeded} onChange={e => setScheduleForm({ ...scheduleForm, sleepNeeded: e.target.value })} />
+                              <input type="text" placeholder="平日通勤時間 (分)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.commuteTime} onChange={e => setScheduleForm({ ...scheduleForm, commuteTime: e.target.value })} />
+                              <input type="text" placeholder="出門時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.departureTime} onChange={e => setScheduleForm({ ...scheduleForm, departureTime: e.target.value })} />
+                              <input type="text" placeholder="到家時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={scheduleForm.returnTime} onChange={e => setScheduleForm({ ...scheduleForm, returnTime: e.target.value })} />
                             </div>
-                            <textarea placeholder="你想額外完成的事 (選填)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner min-h-[60px]" value={scheduleForm.goals} onChange={e => setScheduleForm({...scheduleForm, goals: e.target.value})} />
+                            <textarea placeholder="你想額外完成的事 (選填)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner min-h-[60px]" value={scheduleForm.goals} onChange={e => setScheduleForm({ ...scheduleForm, goals: e.target.value })} />
                             <button onClick={() => handleFormSubmit('schedule')} className="w-full py-3 bg-blue-500 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-100">分析日常行程 & 給予建議</button>
                           </div>
                         )}
 
                         {m.role === 'bot' && m.type === 'form_task' && !m.isSubmitted && (
                           <div className="mt-6 space-y-3">
-                            <input type="text" placeholder="想拆解的任務名稱" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.taskName} onChange={e => setTaskForm({...taskForm, taskName: e.target.value})} />
-                            <input type="text" placeholder="呈現在行事曆的形式 (如: 讀書、實作)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.format} onChange={e => setTaskForm({...taskForm, format: e.target.value})} />
+                            <input type="text" placeholder="想拆解的任務名稱" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.taskName} onChange={e => setTaskForm({ ...taskForm, taskName: e.target.value })} />
+                            <input type="text" placeholder="呈現在行事曆的形式 (如: 讀書、實作)" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.format} onChange={e => setTaskForm({ ...taskForm, format: e.target.value })} />
                             <div className="grid grid-cols-2 gap-2">
-                                <input type="text" placeholder="開始執行時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.startTime} onChange={e => setTaskForm({...taskForm, startTime: e.target.value})} />
-                                <input type="text" placeholder="結束執行時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.endTime} onChange={e => setTaskForm({...taskForm, endTime: e.target.value})} />
+                              <input type="text" placeholder="開始執行時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.startTime} onChange={e => setTaskForm({ ...taskForm, startTime: e.target.value })} />
+                              <input type="text" placeholder="結束執行時間" className="w-full p-3 bg-gray-50 rounded-xl text-xs border-none shadow-inner" value={taskForm.endTime} onChange={e => setTaskForm({ ...taskForm, endTime: e.target.value })} />
                             </div>
                             <button onClick={() => handleFormSubmit('task')} className="w-full py-3 bg-indigo-500 text-white rounded-2xl text-xs font-black shadow-lg shadow-indigo-100">拆解任務並排入行程</button>
                           </div>
@@ -656,7 +630,7 @@ const AIChatView: React.FC<{
                   </div>
                 </div>
               ))}
-              
+
               {isTyping && (
                 <div className="flex justify-start animate-pulse">
                   <div className="flex gap-4 max-w-[80%] items-start">
@@ -664,9 +638,9 @@ const AIChatView: React.FC<{
                       <Sparkles size={14} className="animate-spin duration-[3000ms]" />
                     </div>
                     <div className="bg-gray-50 px-5 py-3 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm flex items-center gap-2">
-                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
-                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-150"></span>
-                       <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-300"></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce"></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-150"></span>
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce delay-300"></span>
                     </div>
                   </div>
                 </div>
@@ -675,7 +649,7 @@ const AIChatView: React.FC<{
               {/* Ad Banner for Regular Users */}
               {!isPremium && (
                 <div className="pt-10">
-                  <div 
+                  <div
                     onClick={() => navigateTo(AppRoute.SETTINGS)}
                     className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 rounded-[2rem] text-white shadow-xl shadow-blue-100/50 flex items-center justify-between cursor-pointer group hover:scale-[1.02] transition-all"
                   >
@@ -701,7 +675,7 @@ const AIChatView: React.FC<{
           <div className="max-w-3xl mx-auto w-full relative">
             <AnimatePresence>
               {showEnterHint && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, scale: 0.8, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.8, y: 10 }}
@@ -712,15 +686,15 @@ const AIChatView: React.FC<{
                 </motion.div>
               )}
             </AnimatePresence>
-            
+
             <div className="relative group bg-white border-2 border-gray-100 focus-within:border-blue-200 rounded-[2rem] shadow-2xl shadow-gray-200/50 transition-all overflow-hidden flex items-end">
               <div className="flex-1 min-h-[64px] flex items-center">
-                <textarea 
+                <textarea
                   rows={1}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="詢問任何問題..." 
+                  placeholder="詢問任何問題..."
                   className="w-full bg-transparent py-5 pl-8 pr-16 text-sm md:text-base font-medium text-gray-800 focus:outline-none transition-all resize-none max-h-[200px]"
                   style={{ height: 'auto' }}
                   onInput={(e) => {
@@ -731,24 +705,34 @@ const AIChatView: React.FC<{
                 />
               </div>
               <div className="p-2.5">
-                <button 
-                   onClick={() => handleSend()} 
-                   disabled={!input.trim()}
-                   className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${input.trim() ? 'bg-blue-600 text-white shadow-lg active:scale-90 scale-100 translate-y-0' : 'bg-gray-100 text-gray-300 scale-95 translate-y-1'}`}
-                 >
-                    <Send size={20} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
-                 </button>
+                <button
+                  onClick={() => handleSend()}
+                  disabled={!input.trim()}
+                  className={`w-12 h-12 rounded-[1.25rem] flex items-center justify-center transition-all ${input.trim() ? 'bg-blue-600 text-white shadow-lg active:scale-90 scale-100 translate-y-0' : 'bg-gray-100 text-gray-300 scale-95 translate-y-1'}`}
+                >
+                  <Send size={20} className={input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""} />
+                </button>
               </div>
             </div>
-            
+
             <div className="mt-4 flex items-center justify-center gap-6">
-               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest px-2 py-1 bg-gray-50 rounded-lg">Focus AI v3.0 Premium</p>
-               <div className="h-1 w-1 bg-gray-200 rounded-full"></div>
-                <p className="text-[10px] text-gray-400 font-medium">模型：Gemini 2.0 Flash</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest px-2 py-1 bg-gray-50 rounded-lg">Focus AI v3.0 Premium</p>
+              <div className="h-1 w-1 bg-gray-200 rounded-full"></div>
+              <p className="text-[10px] text-gray-400 font-medium">模型：Gemini 2.0 Flash</p>
             </div>
           </div>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={handleClearRecords}
+        title="清空對話紀錄？"
+        message="這將會永久刪除您與 FOCUS AI 的所有對話內容，此操作無法復原。"
+        confirmText="確定清空"
+        cancelText="取消"
+      />
     </div>
   );
 };
